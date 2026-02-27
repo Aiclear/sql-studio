@@ -56,6 +56,7 @@ const table = z.object({
 const tableData = z.object({
   columns: z.string().array(),
   rows: z.any().array().array(),
+  row_count: z.number(),
 });
 
 const query = z.object({
@@ -83,8 +84,41 @@ export const fetchOverview = () => $fetch(overview, `${BASE_URL}/`);
 export const fetchTables = () => $fetch(tables, `${BASE_URL}/tables`);
 export const fetchTable = (name: string) =>
   $fetch(table, `${BASE_URL}/tables/${name}`);
-export const fetchTableData = (name: string, page: number) =>
-  $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}`);
+export const fetchTableData = (name: string, page: number, pageSize: number = 50) =>
+  $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}&page_size=${pageSize}`);
+
+export const fetchPrimaryKey = (name: string) =>
+  $fetch(z.string().nullable(), `${BASE_URL}/tables/${name}/primary-key`);
+
+export const updateRow = (name: string, primaryKey: { column: string, value: unknown }, data: Record<string, unknown>) =>
+  $fetch(z.object({ success: z.boolean() }), `${BASE_URL}/tables/${name}/rows`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ primary_key: primaryKey, data }),
+  });
+
+export const insertRow = (name: string, data: Record<string, unknown>) =>
+  $fetch(z.object({ success: z.boolean() }), `${BASE_URL}/tables/${name}/rows`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ data }),
+  });
+
+export const deleteRow = (name: string, primaryKey: { column: string, value: unknown }) =>
+  $fetch(z.object({ success: z.boolean() }), `${BASE_URL}/tables/${name}/rows`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ primary_key: primaryKey }),
+  });
 export const fetchQuery = (value: string) =>
   $fetch(query, `${BASE_URL}/query`, {
     method: "POST",
