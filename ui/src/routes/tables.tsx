@@ -5,12 +5,18 @@ import {
   DatabaseZap,
   TableProperties,
   Table as TableIcon,
+  Plus,
+  Copy,
+  Trash2,
+  Save,
+  X,
 } from "lucide-react";
 import { z } from "zod";
-import { DataGrid } from "react-data-grid";
+import { DataGrid, textEditor } from "react-data-grid";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { CodeBlock, irBlack as CodeDarkTheme } from "react-code-blocks";
+import { useState, useCallback, useMemo } from "react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -21,9 +27,25 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/provider/theme.provider";
-import { fetchTable, fetchTableData, fetchTables } from "@/api";
+import {
+  fetchTable,
+  fetchTableData,
+  fetchTables,
+  fetchTableColumns,
+  insertRow,
+  updateRow,
+  deleteRow,
+} from "@/api";
 import { InfoCard, InfoCardProps } from "@/components/info-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/tables")({
   component: Tables,
@@ -194,54 +216,328 @@ function TableSkeleton() {
   );
 }
 
-function isAtBottom({ currentTarget }: React.UIEvent<HTMLDivElement>): boolean {
-  return (
-    currentTarget.scrollTop + 10 >=
-    currentTarget.scrollHeight - currentTarget.clientHeight
-  );
-}
+type Row = Record<string, unknown>;
+type NewRow = { id: string; isNew: true; data: Row };
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
 
 type TableDataProps = {
   name: string;
 };
+
 function TableData({ name }: TableDataProps) {
   const currentTheme = useTheme();
-  const { isLoading, data, fetchNextPage, hasNextPage } = useInfiniteQuery({
-    queryKey: ["tables", "data", name],
-    queryFn: ({ pageParam }) => fetchTableData(name, pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, _, lastPageParams) => {
-      if (lastPage.rows.length === 0) return undefined;
-      return lastPageParams + 1;
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [newRows, setNewRows] = useState<NewRow[]>([]);
+
+  const { data: columnsData } = useQuery({
+    queryKey: ["tables", "columns", name],
+    queryFn: () => fetchTableColumns(name),
+  });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["tables", "data", name, page, pageSize],
+    queryFn: () => fetchTableData(name, page, pageSize),
+  });
+
+  const insertMutation = useMutation({
+    mutationFn: (row: Row) => insertRow(name, row),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables", "data", name] });
+      queryClient.invalidateQueries({ queryKey: ["tables", name] });
     },
   });
 
-  if (!data) return <Skeleton className="h-[400px]" />;
+  const updateMutation = useMutation({
+    mutationFn: ({
+      primaryKey,
+      keyValue,
+      row,
+    }: {
+      primaryKey: string;
+      keyValue: unknown;
+      row: Row;
+    }) => updateRow(name, primaryKey, keyValue, row),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables", "data", name] });
+    },
+  });
 
-  function handleScroll(event: React.UIEvent<HTMLDivElement>) {
-    if (isLoading || !isAtBottom(event) || !hasNextPage) return;
-    fetchNextPage();
-  }
+  const deleteMutation = useMutation({
+    mutationFn: ({
+      primaryKey,
+      keyValue,
+    }: {
+      primaryKey: string;
+      keyValue: unknown;
+    }) => deleteRow(name, primaryKey, keyValue),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables", "data", name] });
+      queryClient.invalidateQueries({ queryKey: ["tables", name] });
+    },
+  });
 
-  const columns = data.pages[0].columns.map((col) => ({ key: col, name: col }));
+  const primaryKey = columnsData?.primary_key;
+  const columns = useMemo(() => {
+    if (!data) return [];
+    return data.columns.map((col) => ({
+      key: col,
+      name: col,
+      renderEditCell: textEditor,
+    }));
+  }, [data]);
 
-  const grouped = data.pages.map((page) =>
-    page.rows.map((row) =>
-      row.reduce((acc, curr, i) => {
-        acc[page.columns[i]] = curr;
+  const rows = useMemo(() => {
+    if (!data) return [];
+    return data.rows.map((row, rowIndex) => {
+      const rowData: Row = {};
+      data.columns.forEach((col, i) => {
+        rowData[col] = row[i];
+      });
+      const rowId = primaryKey ? String(rowData[primaryKey]) : String(rowIndex);
+      return { id: rowId, ...rowData };
+    });
+  }, [data, primaryKey]);
+
+  const allRows = useMemo(() => {
+    const newRowsData = newRows.map((nr) => ({ id: nr.id, isNew: true, ...nr.data }));
+    return [...newRowsData, ...rows] as (Row & { id?: string; isNew?: boolean })[];
+  }, [rows, newRows]);
+
+  const totalPages = data ? Math.ceil(data.total_rows / pageSize) : 0;
+
+  const handleAddRow = useCallback(() => {
+    const newRow: NewRow = {
+      id: `new-${Date.now()}`,
+      isNew: true,
+      data: columnsData?.columns.reduce((acc, col) => {
+        acc[col.name] = null;
         return acc;
-      }, {}),
-    ),
-  ) as never[][];
-  const rows = [].concat(...grouped);
+      }, {} as Row) || {},
+    };
+    setNewRows((prev) => [...prev, newRow]);
+  }, [columnsData]);
+
+  const handleCopyRow = useCallback((row: Row) => {
+    const data: Row = {};
+    Object.keys(row).forEach((key) => {
+      if (key !== "id" && key !== "isNew") {
+        data[key] = row[key];
+      }
+    });
+    if (primaryKey && data[primaryKey]) {
+      data[primaryKey] = null;
+    }
+    const copiedRow: NewRow = {
+      id: `copy-${Date.now()}`,
+      isNew: true,
+      data,
+    };
+    setNewRows((prev) => [...prev, copiedRow]);
+  }, [primaryKey]);
+
+  const handleDeleteRow = useCallback((row: Row) => {
+    if (!primaryKey) {
+      alert("Cannot delete row: no primary key defined");
+      return;
+    }
+    const keyValue = row[primaryKey];
+    if (keyValue === undefined || keyValue === null) {
+      alert("Cannot delete row: primary key value is missing");
+      return;
+    }
+    if (confirm(`Are you sure you want to delete this row?`)) {
+      deleteMutation.mutate({ primaryKey, keyValue });
+    }
+  }, [primaryKey, deleteMutation]);
+
+  const handleSaveNewRow = useCallback((newRow: NewRow) => {
+    const rowToInsert: Row = {};
+    Object.keys(newRow.data).forEach((key) => {
+      if (key === "id" || key === "isNew") return;
+      const value = newRow.data[key];
+      if (value !== null && value !== undefined && value !== "") {
+        rowToInsert[key] = value;
+      }
+    });
+    insertMutation.mutate(rowToInsert, {
+      onSuccess: () => {
+        setNewRows((prev) => prev.filter((nr) => nr.id !== newRow.id));
+      },
+      onError: (error) => {
+        alert(`Failed to insert row: ${error}`);
+      },
+    });
+  }, [insertMutation]);
+
+  const handleCancelNewRow = useCallback((rowId: string) => {
+    setNewRows((prev) => prev.filter((nr) => nr.id !== rowId));
+  }, []);
+
+  const handleRowUpdate = useCallback((row: Row) => {
+    if (!primaryKey) {
+      alert("Cannot update row: no primary key defined");
+      return;
+    }
+    const keyValue = row[primaryKey];
+    const rowToUpdate: Row = {};
+    Object.keys(row).forEach((key) => {
+      if (key === "id" || key === "isNew") return;
+      rowToUpdate[key] = row[key];
+    });
+    updateMutation.mutate({ primaryKey, keyValue, row: rowToUpdate });
+  }, [primaryKey, updateMutation]);
+
+  const onRowsChange = useCallback((newRows: typeof allRows, { indexes }: { indexes: number[] }) => {
+    indexes.forEach((index) => {
+      const changedRow = newRows[index];
+      if (changedRow.isNew) {
+        const rowData: Row = {};
+        Object.keys(changedRow).forEach((key) => {
+          if (key !== "id" && key !== "isNew") {
+            rowData[key] = changedRow[key as keyof typeof changedRow];
+          }
+        });
+        setNewRows((prev) =>
+          prev.map((nr) =>
+            nr.id === changedRow.id ? { ...nr, data: rowData } : nr
+          )
+        );
+      } else if (primaryKey && changedRow[primaryKey]) {
+        const rowData: Row = {};
+        Object.keys(changedRow).forEach((key) => {
+          if (key !== "id" && key !== "isNew") {
+            rowData[key] = changedRow[key as keyof typeof changedRow];
+          }
+        });
+        handleRowUpdate(rowData);
+      }
+    });
+  }, [primaryKey, handleRowUpdate]);
+
+  const actionColumn = useMemo(() => ({
+    key: "__actions",
+    name: "Actions",
+    width: 150,
+    renderCell: ({ row }: { row: Row & { id?: string; isNew?: boolean } }) => {
+      if (row.isNew) {
+        const newRow = newRows.find((nr) => nr.id === row.id);
+        if (!newRow) return null;
+        return (
+          <div className="flex gap-1 p-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleSaveNewRow(newRow)}
+              disabled={insertMutation.isPending}
+            >
+              <Save className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleCancelNewRow(newRow.id)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      }
+      return (
+        <div className="flex gap-1 p-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => handleCopyRow(row)}
+            title="Copy row"
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => handleDeleteRow(row)}
+            disabled={deleteMutation.isPending}
+            title="Delete row"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      );
+    },
+  }), [newRows, handleSaveNewRow, handleCancelNewRow, handleCopyRow, handleDeleteRow, insertMutation.isPending, deleteMutation.isPending]);
+
+  const allColumns = useMemo(() => [...columns, actionColumn], [columns, actionColumn]);
+
+  if (isLoading || !data) return <Skeleton className="h-[400px]" />;
 
   return (
-    <DataGrid
-      rows={rows}
-      columns={columns}
-      onScroll={handleScroll}
-      defaultColumnOptions={{ resizable: true }}
-      className={cn(currentTheme === "light" ? "rdg-light" : "rdg-dark")}
-    />
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={handleAddRow}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add Row
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {data.total_rows.toLocaleString()} total rows
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Rows per page:</span>
+          <Select
+            value={String(pageSize)}
+            onValueChange={(value) => {
+              setPageSize(Number(value));
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[80px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <DataGrid
+        rows={allRows}
+        columns={allColumns}
+        onRowsChange={onRowsChange}
+        defaultColumnOptions={{ resizable: true }}
+        className={cn(currentTheme === "light" ? "rdg-light" : "rdg-dark")}
+        style={{ height: "calc(100vh - 400px)", minHeight: "300px" }}
+      />
+
+      <div className="flex items-center justify-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={page <= 1}
+          onClick={() => setPage((p) => p - 1)}
+        >
+          Previous
+        </Button>
+        <span className="text-sm">
+          Page {page} of {totalPages} ({((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, data.total_rows)} of {data.total_rows})
+        </span>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={page >= totalPages}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
   );
 }

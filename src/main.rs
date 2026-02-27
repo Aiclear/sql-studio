@@ -335,7 +335,34 @@ trait Database: Sized + Clone + Send {
         &self,
         name: String,
         page: i32,
+        page_size: i32,
     ) -> impl std::future::Future<Output = color_eyre::Result<responses::TableData>> + Send;
+
+    fn table_columns(
+        &self,
+        name: String,
+    ) -> impl std::future::Future<Output = color_eyre::Result<responses::TableColumns>> + Send;
+
+    fn insert_row(
+        &self,
+        table_name: String,
+        row: std::collections::HashMap<String, serde_json::Value>,
+    ) -> impl std::future::Future<Output = color_eyre::Result<()>> + Send;
+
+    fn update_row(
+        &self,
+        table_name: String,
+        primary_key: String,
+        key_value: serde_json::Value,
+        row: std::collections::HashMap<String, serde_json::Value>,
+    ) -> impl std::future::Future<Output = color_eyre::Result<()>> + Send;
+
+    fn delete_row(
+        &self,
+        table_name: String,
+        primary_key: String,
+        key_value: serde_json::Value,
+    ) -> impl std::future::Future<Output = color_eyre::Result<()>> + Send;
 
     fn tables_with_columns(
         &self,
@@ -409,17 +436,89 @@ impl Database for AllDbs {
         &self,
         name: String,
         page: i32,
+        page_size: i32,
     ) -> color_eyre::Result<responses::TableData> {
         match self {
-            AllDbs::Sqlite(x) => x.table_data(name, page).await,
-            AllDbs::Libsql(x) => x.table_data(name, page).await,
-            AllDbs::Postgres(x) => x.table_data(name, page).await,
-            AllDbs::Mysql(x) => x.table_data(name, page).await,
-            AllDbs::Duckdb(x) => x.table_data(name, page).await,
-            AllDbs::Parquet(x) => x.table_data(name, page).await,
-            AllDbs::Csv(x) => x.table_data(name, page).await,
-            AllDbs::Clickhouse(x) => x.table_data(name, page).await,
-            AllDbs::MsSql(x) => x.table_data(name, page).await,
+            AllDbs::Sqlite(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Libsql(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Postgres(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Mysql(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Duckdb(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Parquet(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Csv(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Clickhouse(x) => x.table_data(name, page, page_size).await,
+            AllDbs::MsSql(x) => x.table_data(name, page, page_size).await,
+        }
+    }
+
+    async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+        match self {
+            AllDbs::Sqlite(x) => x.table_columns(name).await,
+            AllDbs::Libsql(x) => x.table_columns(name).await,
+            AllDbs::Postgres(x) => x.table_columns(name).await,
+            AllDbs::Mysql(x) => x.table_columns(name).await,
+            AllDbs::Duckdb(x) => x.table_columns(name).await,
+            AllDbs::Parquet(x) => x.table_columns(name).await,
+            AllDbs::Csv(x) => x.table_columns(name).await,
+            AllDbs::Clickhouse(x) => x.table_columns(name).await,
+            AllDbs::MsSql(x) => x.table_columns(name).await,
+        }
+    }
+
+    async fn insert_row(
+        &self,
+        table_name: String,
+        row: std::collections::HashMap<String, serde_json::Value>,
+    ) -> color_eyre::Result<()> {
+        match self {
+            AllDbs::Sqlite(x) => x.insert_row(table_name, row).await,
+            AllDbs::Libsql(x) => x.insert_row(table_name, row).await,
+            AllDbs::Postgres(x) => x.insert_row(table_name, row).await,
+            AllDbs::Mysql(x) => x.insert_row(table_name, row).await,
+            AllDbs::Duckdb(x) => x.insert_row(table_name, row).await,
+            AllDbs::Parquet(x) => x.insert_row(table_name, row).await,
+            AllDbs::Csv(x) => x.insert_row(table_name, row).await,
+            AllDbs::Clickhouse(x) => x.insert_row(table_name, row).await,
+            AllDbs::MsSql(x) => x.insert_row(table_name, row).await,
+        }
+    }
+
+    async fn update_row(
+        &self,
+        table_name: String,
+        primary_key: String,
+        key_value: serde_json::Value,
+        row: std::collections::HashMap<String, serde_json::Value>,
+    ) -> color_eyre::Result<()> {
+        match self {
+            AllDbs::Sqlite(x) => x.update_row(table_name, primary_key, key_value, row).await,
+            AllDbs::Libsql(x) => x.update_row(table_name, primary_key, key_value, row).await,
+            AllDbs::Postgres(x) => x.update_row(table_name, primary_key, key_value, row).await,
+            AllDbs::Mysql(x) => x.update_row(table_name, primary_key, key_value, row).await,
+            AllDbs::Duckdb(x) => x.update_row(table_name, primary_key, key_value, row).await,
+            AllDbs::Parquet(x) => x.update_row(table_name, primary_key, key_value, row).await,
+            AllDbs::Csv(x) => x.update_row(table_name, primary_key, key_value, row).await,
+            AllDbs::Clickhouse(x) => x.update_row(table_name, primary_key, key_value, row).await,
+            AllDbs::MsSql(x) => x.update_row(table_name, primary_key, key_value, row).await,
+        }
+    }
+
+    async fn delete_row(
+        &self,
+        table_name: String,
+        primary_key: String,
+        key_value: serde_json::Value,
+    ) -> color_eyre::Result<()> {
+        match self {
+            AllDbs::Sqlite(x) => x.delete_row(table_name, primary_key, key_value).await,
+            AllDbs::Libsql(x) => x.delete_row(table_name, primary_key, key_value).await,
+            AllDbs::Postgres(x) => x.delete_row(table_name, primary_key, key_value).await,
+            AllDbs::Mysql(x) => x.delete_row(table_name, primary_key, key_value).await,
+            AllDbs::Duckdb(x) => x.delete_row(table_name, primary_key, key_value).await,
+            AllDbs::Parquet(x) => x.delete_row(table_name, primary_key, key_value).await,
+            AllDbs::Csv(x) => x.delete_row(table_name, primary_key, key_value).await,
+            AllDbs::Clickhouse(x) => x.delete_row(table_name, primary_key, key_value).await,
+            AllDbs::MsSql(x) => x.delete_row(table_name, primary_key, key_value).await,
         }
     }
 
@@ -765,6 +864,7 @@ mod sqlite {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             Ok(self
                 .conn
@@ -774,13 +874,19 @@ mod sqlite {
                             r.get::<_, String>(1)
                         })?;
 
-                    let offset = (page - 1) * ROWS_PER_PAGE;
+                    let total_rows: i32 = conn.query_row(
+                        &format!(r#"SELECT count(*) FROM "{}""#, name),
+                        [],
+                        |r| r.get(0),
+                    )?;
+
+                    let offset = (page - 1) * page_size;
                     let mut stmt = conn.prepare(&format!(
                         r#"
                         SELECT *
-                        FROM '{name}'
-                        ORDER BY {first_column}
-                        LIMIT {ROWS_PER_PAGE}
+                        FROM "{name}"
+                        ORDER BY "{first_column}"
+                        LIMIT {page_size}
                         OFFSET {offset}
                         "#
                     ))?;
@@ -803,9 +909,130 @@ mod sqlite {
                         .filter_map(|x| x.ok())
                         .collect::<Vec<_>>();
 
-                    Ok(responses::TableData { columns, rows })
+                    Ok(responses::TableData {
+                        columns,
+                        rows,
+                        total_rows,
+                        page,
+                        page_size,
+                    })
                 })
                 .await?)
+        }
+
+        async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+            Ok(self
+                .conn
+                .call(move |conn| {
+                    let mut stmt = conn.prepare(&format!("PRAGMA table_info('{name}')"))?;
+                    let columns = stmt
+                        .query_map((), |r| {
+                            Ok(responses::ColumnInfo {
+                                name: r.get::<_, String>(1)?,
+                                data_type: r.get::<_, String>(2)?,
+                                nullable: r.get::<_, i32>(3)? == 0,
+                                is_primary_key: r.get::<_, i32>(5)? > 0,
+                            })
+                        })?
+                        .filter_map(|r| r.ok())
+                        .collect::<Vec<_>>();
+
+                    let primary_key = columns
+                        .iter()
+                        .find(|c| c.is_primary_key)
+                        .map(|c| c.name.clone());
+
+                    Ok(responses::TableColumns {
+                        columns,
+                        primary_key,
+                    })
+                })
+                .await?)
+        }
+
+        async fn insert_row(
+            &self,
+            table_name: String,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            self.conn
+                .call(move |conn| {
+                    let columns: Vec<String> = row.keys().map(|s| format!(r#""{}""#, s)).collect();
+                    let placeholders: Vec<&str> = row.keys().map(|_| "?").collect();
+                    let values: Vec<serde_json::Value> = row.values().cloned().collect();
+
+                    let sql = format!(
+                        r#"INSERT INTO "{}" ({}) VALUES ({})"#,
+                        table_name,
+                        columns.join(", "),
+                        placeholders.join(", ")
+                    );
+
+                    let mut stmt = conn.prepare(&sql)?;
+                    let params: Vec<tokio_rusqlite::types::Value> = values
+                        .iter()
+                        .map(|v| helpers::json_to_rusqlite_value(v.clone()))
+                        .collect();
+
+                    stmt.execute(tokio_rusqlite::params_from_iter(params))?;
+                    Ok(())
+                })
+                .await?;
+            Ok(())
+        }
+
+        async fn update_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            self.conn
+                .call(move |conn| {
+                    let set_clauses: Vec<String> = row
+                        .keys()
+                        .map(|col| format!(r#""{}" = ?"#, col))
+                        .collect();
+                    let values: Vec<serde_json::Value> = row.values().cloned().collect();
+
+                    let sql = format!(
+                        r#"UPDATE "{}" SET {} WHERE "{}" = ?"#,
+                        table_name,
+                        set_clauses.join(", "),
+                        primary_key
+                    );
+
+                    let mut stmt = conn.prepare(&sql)?;
+                    let mut params: Vec<tokio_rusqlite::types::Value> = values
+                        .iter()
+                        .map(|v| helpers::json_to_rusqlite_value(v.clone()))
+                        .collect();
+                    params.push(helpers::json_to_rusqlite_value(key_value));
+
+                    stmt.execute(tokio_rusqlite::params_from_iter(params))?;
+                    Ok(())
+                })
+                .await?;
+            Ok(())
+        }
+
+        async fn delete_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            self.conn
+                .call(move |conn| {
+                    let sql = format!(r#"DELETE FROM "{}" WHERE "{}" = ?"#, table_name, primary_key);
+                    let mut stmt = conn.prepare(&sql)?;
+                    let param = helpers::json_to_rusqlite_value(key_value);
+                    stmt.execute([param])?;
+                    Ok(())
+                })
+                .await?;
+            Ok(())
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -1348,6 +1575,7 @@ mod libsql {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let conn = self.db.connect()?;
 
@@ -1372,7 +1600,15 @@ mod libsql {
                 .collect::<Vec<_>>();
 
             let columns_len = columns.len();
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let total_rows: i32 = conn
+                .query(&format!("SELECT count(*) FROM '{name}'"), ())
+                .await?
+                .next()
+                .await?
+                .ok_or_eyre("no row returned from db")?
+                .get::<i32>(0)?;
+
+            let offset = (page - 1) * page_size;
             let rows = conn
                 .query(
                     &format!(
@@ -1380,7 +1616,7 @@ mod libsql {
                 SELECT *
                 FROM '{name}'
                 ORDER BY {first_column}
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset}
                         "#,
                     ),
@@ -1403,7 +1639,107 @@ mod libsql {
                 .filter_map(|r| r.ok())
                 .collect::<Vec<_>>();
 
-            Ok(responses::TableData { columns, rows })
+            Ok(responses::TableData {
+                columns,
+                rows,
+                total_rows,
+                page,
+                page_size,
+            })
+        }
+
+        async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+            let conn = self.db.connect()?;
+
+            let columns = conn
+                .query(&format!("PRAGMA table_info('{name}')"), ())
+                .await?
+                .into_stream()
+                .map_ok(|r| {
+                    let name = r.get::<String>(1);
+                    let data_type = r.get::<String>(2);
+                    let nullable = r.get::<i32>(3);
+                    let is_primary_key = r.get::<i32>(5);
+                    
+                    responses::ColumnInfo {
+                        name: name.unwrap_or_default(),
+                        data_type: data_type.unwrap_or_default(),
+                        nullable: nullable.unwrap_or(0) == 0,
+                        is_primary_key: is_primary_key.unwrap_or(0) > 0,
+                    }
+                })
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .filter_map(|r| r.ok())
+                .collect::<Vec<_>>();
+
+            let primary_key = columns
+                .iter()
+                .find(|c| c.is_primary_key)
+                .map(|c| c.name.clone());
+
+            Ok(responses::TableColumns {
+                columns,
+                primary_key,
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            table_name: String,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let conn = self.db.connect()?;
+            let columns: Vec<&str> = row.keys().map(|s| s.as_str()).collect();
+            let placeholders: Vec<&str> = row.keys().map(|_| "?").collect();
+            let values: Vec<libsql::Value> = row.values().map(|v| helpers::json_to_libsql_value(v.clone())).collect();
+
+            let sql = format!(
+                "INSERT INTO '{}' ({}) VALUES ({})",
+                table_name,
+                columns.join(", "),
+                placeholders.join(", ")
+            );
+
+            conn.execute(&sql, values).await?;
+            Ok(())
+        }
+
+        async fn update_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let conn = self.db.connect()?;
+            let set_clauses: Vec<String> = row.keys().map(|col| format!("{} = ?", col)).collect();
+            let mut values: Vec<libsql::Value> = row.values().map(|v| helpers::json_to_libsql_value(v.clone())).collect();
+            values.push(helpers::json_to_libsql_value(key_value));
+
+            let sql = format!(
+                "UPDATE '{}' SET {} WHERE {} = ?",
+                table_name,
+                set_clauses.join(", "),
+                primary_key
+            );
+
+            conn.execute(&sql, values).await?;
+            Ok(())
+        }
+
+        async fn delete_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let conn = self.db.connect()?;
+            let sql = format!("DELETE FROM '{}' WHERE {} = ?", table_name, primary_key);
+            let param = helpers::json_to_libsql_value(key_value);
+            conn.execute(&sql, [param]).await?;
+            Ok(())
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -1946,6 +2282,7 @@ mod postgres {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let schema = &self.schema;
 
@@ -1966,12 +2303,18 @@ mod postgres {
                 .await?
                 .get(0);
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let total_rows: i64 = self
+                .client
+                .query_one(&format!(r#"SELECT count(*) FROM "{name}""#), &[])
+                .await?
+                .get(0);
+
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM "{name}"
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#
             );
@@ -2007,7 +2350,119 @@ mod postgres {
                 })
                 .collect::<Vec<_>>();
 
-            Ok(responses::TableData { columns, rows })
+            Ok(responses::TableData {
+                columns,
+                rows,
+                total_rows: total_rows as i32,
+                page,
+                page_size,
+            })
+        }
+
+        async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+            let schema = &self.schema;
+
+            let rows = self
+                .client
+                .query(
+                    &format!(
+                        r#"
+            SELECT column_name, data_type, is_nullable,
+                   CASE WHEN kcu.column_name IS NOT NULL THEN true ELSE false END as is_primary_key
+            FROM information_schema.columns c
+            LEFT JOIN information_schema.table_constraints tc
+                ON c.table_schema = tc.table_schema
+                AND c.table_name = tc.table_name
+                AND tc.constraint_type = 'PRIMARY KEY'
+            LEFT JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND c.column_name = kcu.column_name
+            WHERE c.table_schema = '{schema}'
+            AND c.table_name = '{name}'
+                        "#
+                    ),
+                    &[],
+                )
+                .await?;
+
+            let columns: Vec<responses::ColumnInfo> = rows
+                .into_iter()
+                .map(|r| responses::ColumnInfo {
+                    name: r.get(0),
+                    data_type: r.get(1),
+                    nullable: r.get::<_, String>(2) == "YES",
+                    is_primary_key: r.get(3),
+                })
+                .collect();
+
+            let primary_key = columns
+                .iter()
+                .find(|c| c.is_primary_key)
+                .map(|c| c.name.clone());
+
+            Ok(responses::TableColumns {
+                columns,
+                primary_key,
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            table_name: String,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let columns: Vec<&str> = row.keys().map(|s| s.as_str()).collect();
+            let values: Vec<String> = row.values().map(|v| helpers::json_to_postgres_value(v)).collect();
+
+            let sql = format!(
+                r#"INSERT INTO "{}" ({}) VALUES ({})"#,
+                table_name,
+                columns.join(", "),
+                values.join(", ")
+            );
+
+            self.client.execute(&sql, &[]).await?;
+            Ok(())
+        }
+
+        async fn update_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let set_clauses: Vec<String> = row
+                .iter()
+                .map(|(col, val)| format!(r#""{}" = {}"#, col, helpers::json_to_postgres_value(val)))
+                .collect();
+
+            let sql = format!(
+                r#"UPDATE "{}" SET {} WHERE "{}" = {}"#,
+                table_name,
+                set_clauses.join(", "),
+                primary_key,
+                helpers::json_to_postgres_value(&key_value)
+            );
+
+            self.client.execute(&sql, &[]).await?;
+            Ok(())
+        }
+
+        async fn delete_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let sql = format!(
+                r#"DELETE FROM "{}" WHERE "{}" = {}"#,
+                table_name,
+                primary_key,
+                helpers::json_to_postgres_value(&key_value)
+            );
+            self.client.execute(&sql, &[]).await?;
+            Ok(())
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -2484,6 +2939,7 @@ mod mysql {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let mut conn = self.pool.get_conn().await?;
 
@@ -2499,12 +2955,19 @@ mod mysql {
             .map(|count: String| count)
             .ok_or_eyre("couldn't get first column")?;
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let total_rows: i32 = format!("SELECT count(*) AS count FROM {name}")
+                .with(())
+                .first(&mut conn)
+                .await?
+                .map(|count: i32| count)
+                .ok_or_eyre("couldn't count rows")?;
+
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM {name}
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#
             );
@@ -2540,7 +3003,103 @@ mod mysql {
                 })
                 .collect::<Vec<_>>();
 
-            Ok(responses::TableData { columns, rows })
+            Ok(responses::TableData {
+                columns,
+                rows,
+                total_rows,
+                page,
+                page_size,
+            })
+        }
+
+        async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+            let mut conn = self.pool.get_conn().await?;
+
+            let rows = r#"
+            SELECT column_name, data_type, is_nullable,
+                   CASE WHEN column_key = 'PRI' THEN true ELSE false END as is_primary_key
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE() AND table_name = :table_name
+                "#
+            .with(params! {
+                "table_name" => &name
+            })
+            .map(&mut conn, |(name, data_type, nullable, is_pk): (String, String, String, bool)| {
+                responses::ColumnInfo {
+                    name,
+                    data_type,
+                    nullable: nullable == "YES",
+                    is_primary_key: is_pk,
+                }
+            })
+            .await?;
+
+            let primary_key = rows
+                .iter()
+                .find(|c| c.is_primary_key)
+                .map(|c| c.name.clone());
+
+            Ok(responses::TableColumns {
+                columns: rows,
+                primary_key,
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            table_name: String,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let mut conn = self.pool.get_conn().await?;
+            let columns: Vec<&str> = row.keys().map(|s| s.as_str()).collect();
+            let placeholders: Vec<&str> = row.keys().map(|_| "?").collect();
+            let values: Vec<String> = row.values().map(|v| helpers::json_to_mysql_value(v)).collect();
+
+            let sql = format!(
+                "INSERT INTO {} ({}) VALUES ({})",
+                table_name,
+                columns.join(", "),
+                placeholders.join(", ")
+            );
+
+            conn.exec_drop(sql, values).await?;
+            Ok(())
+        }
+
+        async fn update_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let mut conn = self.pool.get_conn().await?;
+            let set_clauses: Vec<String> = row.keys().map(|col| format!("{} = ?", col)).collect();
+            let mut values: Vec<String> = row.values().map(|v| helpers::json_to_mysql_value(v)).collect();
+            values.push(helpers::json_to_mysql_value(&key_value));
+
+            let sql = format!(
+                "UPDATE {} SET {} WHERE {} = ?",
+                table_name,
+                set_clauses.join(", "),
+                primary_key
+            );
+
+            conn.exec_drop(sql, values).await?;
+            Ok(())
+        }
+
+        async fn delete_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let mut conn = self.pool.get_conn().await?;
+            let sql = format!("DELETE FROM {} WHERE {} = ?", table_name, primary_key);
+            let value = helpers::json_to_mysql_value(&key_value);
+            conn.exec_drop(sql, (value,)).await?;
+            Ok(())
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -2994,10 +3553,11 @@ mod duckdb {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let c = self.conn.clone();
 
-            let (columns, rows) = tokio::task::spawn_blocking(move || {
+            let (columns, rows, total_rows) = tokio::task::spawn_blocking(move || {
                 let c = c.lock().expect("could not get lock on connection");
 
                 let first_column: String =
@@ -3005,12 +3565,17 @@ mod duckdb {
                         row.get(1)
                     })?;
 
-                let offset = (page - 1) * ROWS_PER_PAGE;
+                let total_rows: i32 =
+                    c.query_row(&format!(r#"SELECT count(*) FROM "{name}""#), [], |row| {
+                        row.get(0)
+                    })?;
+
+                let offset = (page - 1) * page_size;
                 let sql = format!(
                     r#"
                 SELECT * FROM "{name}"
                 ORDER BY "{first_column}"
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset};
                     "#
                 );
@@ -3034,11 +3599,127 @@ mod duckdb {
 
                 let columns = stmt.column_names();
 
-                eyre::Ok((columns, rows))
+                eyre::Ok((columns, rows, total_rows))
             })
             .await??;
 
-            Ok(responses::TableData { columns, rows })
+            Ok(responses::TableData {
+                columns,
+                rows,
+                total_rows,
+                page,
+                page_size,
+            })
+        }
+
+        async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+            let c = self.conn.clone();
+
+            let (columns, primary_key) = tokio::task::spawn_blocking(move || {
+                let c = c.lock().expect("could not get lock on connection");
+
+                let mut stmt = c.prepare(&format!("PRAGMA table_info('{name}')"))?;
+                let columns = stmt
+                    .query_map([], |r| {
+                        Ok(responses::ColumnInfo {
+                            name: r.get::<_, String>(1)?,
+                            data_type: r.get::<_, String>(2)?,
+                            nullable: r.get::<_, i32>(3)? == 0,
+                            is_primary_key: r.get::<_, i32>(5)? > 0,
+                        })
+                    })?
+                    .filter_map(|r| r.ok())
+                    .collect::<Vec<_>>();
+
+                let primary_key = columns
+                    .iter()
+                    .find(|c| c.is_primary_key)
+                    .map(|c| c.name.clone());
+
+                eyre::Ok((columns, primary_key))
+            })
+            .await??;
+
+            Ok(responses::TableColumns {
+                columns,
+                primary_key,
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            table_name: String,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let c = self.conn.clone();
+            let columns: Vec<&str> = row.keys().map(|s| s.as_str()).collect();
+            let placeholders: Vec<&str> = row.keys().map(|_| "?").collect();
+            let values: Vec<duckdb::types::Value> = row.values().map(|v| helpers::json_to_duckdb_value(v.clone())).collect();
+
+            let sql = format!(
+                r#"INSERT INTO "{}" ({}) VALUES ({})"#,
+                table_name,
+                columns.join(", "),
+                placeholders.join(", ")
+            );
+
+            tokio::task::spawn_blocking(move || {
+                let c = c.lock().expect("could not get lock on connection");
+                c.execute(&sql, duckdb::params_from_iter(values))?;
+                eyre::Ok(())
+            })
+            .await??;
+
+            Ok(())
+        }
+
+        async fn update_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let c = self.conn.clone();
+            let set_clauses: Vec<String> = row.keys().map(|col| format!("{} = ?", col)).collect();
+            let mut values: Vec<duckdb::types::Value> = row.values().map(|v| helpers::json_to_duckdb_value(v.clone())).collect();
+            values.push(helpers::json_to_duckdb_value(key_value));
+
+            let sql = format!(
+                r#"UPDATE "{}" SET {} WHERE {} = ?"#,
+                table_name,
+                set_clauses.join(", "),
+                primary_key
+            );
+
+            tokio::task::spawn_blocking(move || {
+                let c = c.lock().expect("could not get lock on connection");
+                c.execute(&sql, duckdb::params_from_iter(values))?;
+                eyre::Ok(())
+            })
+            .await??;
+
+            Ok(())
+        }
+
+        async fn delete_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let c = self.conn.clone();
+            let sql = format!(r#"DELETE FROM "{}" WHERE {} = ?"#, table_name, primary_key);
+            let param = helpers::json_to_duckdb_value(key_value);
+
+            tokio::task::spawn_blocking(move || {
+                let c = c.lock().expect("could not get lock on connection");
+                c.execute(&sql, [param])?;
+                eyre::Ok(())
+            })
+            .await??;
+
+            Ok(())
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -3369,10 +4050,11 @@ mod parquet {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let c = self.conn.clone();
 
-            let (columns, rows) = tokio::task::spawn_blocking(move || {
+            let (columns, rows, total_rows) = tokio::task::spawn_blocking(move || {
                 let c = c.lock().expect("could not get lock on connection");
 
                 let first_column: String =
@@ -3380,12 +4062,17 @@ mod parquet {
                         row.get(1)
                     })?;
 
-                let offset = (page - 1) * ROWS_PER_PAGE;
+                let total_rows: i32 =
+                    c.query_row(&format!(r#"SELECT count(*) FROM "{name}""#), [], |row| {
+                        row.get(0)
+                    })?;
+
+                let offset = (page - 1) * page_size;
                 let sql = format!(
                     r#"
                 SELECT * FROM "{name}"
                 ORDER BY "{first_column}"
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset};
                     "#
                 );
@@ -3409,11 +4096,77 @@ mod parquet {
 
                 let columns = stmt.column_names();
 
-                eyre::Ok((columns, rows))
+                eyre::Ok((columns, rows, total_rows))
             })
             .await??;
 
-            Ok(responses::TableData { columns, rows })
+            Ok(responses::TableData {
+                columns,
+                rows,
+                total_rows,
+                page,
+                page_size,
+            })
+        }
+
+        async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+            let c = self.conn.clone();
+            let (columns, primary_key) = tokio::task::spawn_blocking(move || {
+                let c = c.lock().expect("could not get lock on connection");
+
+                let mut stmt = c.prepare(&format!("PRAGMA table_info('{name}')"))?;
+                let columns = stmt
+                    .query_map([], |r| {
+                        Ok(responses::ColumnInfo {
+                            name: r.get::<_, String>(1)?,
+                            data_type: r.get::<_, String>(2)?,
+                            nullable: r.get::<_, i32>(3)? == 0,
+                            is_primary_key: r.get::<_, i32>(5)? > 0,
+                        })
+                    })?
+                    .filter_map(|r| r.ok())
+                    .collect::<Vec<_>>();
+
+                let primary_key = columns
+                    .iter()
+                    .find(|c| c.is_primary_key)
+                    .map(|c| c.name.clone());
+
+                eyre::Ok((columns, primary_key))
+            })
+            .await??;
+
+            Ok(responses::TableColumns {
+                columns,
+                primary_key,
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            _table_name: String,
+            _row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            Err(color_eyre::eyre::eyre!("Parquet files are read-only"))
+        }
+
+        async fn update_row(
+            &self,
+            _table_name: String,
+            _primary_key: String,
+            _key_value: serde_json::Value,
+            _row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            Err(color_eyre::eyre::eyre!("Parquet files are read-only"))
+        }
+
+        async fn delete_row(
+            &self,
+            _table_name: String,
+            _primary_key: String,
+            _key_value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            Err(color_eyre::eyre::eyre!("Parquet files are read-only"))
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -3696,10 +4449,11 @@ mod csv {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let c = self.conn.clone();
 
-            let (columns, rows) = tokio::task::spawn_blocking(move || {
+            let (columns, rows, total_rows) = tokio::task::spawn_blocking(move || {
                 let c = c.lock().expect("could not get lock on connection");
 
                 let first_column: String =
@@ -3707,12 +4461,17 @@ mod csv {
                         row.get(1)
                     })?;
 
-                let offset = (page - 1) * ROWS_PER_PAGE;
+                let total_rows: i32 =
+                    c.query_row(&format!(r#"SELECT count(*) FROM "{name}""#), [], |row| {
+                        row.get(0)
+                    })?;
+
+                let offset = (page - 1) * page_size;
                 let sql = format!(
                     r#"
                 SELECT * FROM "{name}"
                 ORDER BY "{first_column}"
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset};
                     "#
                 );
@@ -3736,11 +4495,77 @@ mod csv {
 
                 let columns = stmt.column_names();
 
-                eyre::Ok((columns, rows))
+                eyre::Ok((columns, rows, total_rows))
             })
             .await??;
 
-            Ok(responses::TableData { columns, rows })
+            Ok(responses::TableData {
+                columns,
+                rows,
+                total_rows,
+                page,
+                page_size,
+            })
+        }
+
+        async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+            let c = self.conn.clone();
+            let (columns, primary_key) = tokio::task::spawn_blocking(move || {
+                let c = c.lock().expect("could not get lock on connection");
+
+                let mut stmt = c.prepare(&format!("PRAGMA table_info('{name}')"))?;
+                let columns = stmt
+                    .query_map([], |r| {
+                        Ok(responses::ColumnInfo {
+                            name: r.get::<_, String>(1)?,
+                            data_type: r.get::<_, String>(2)?,
+                            nullable: r.get::<_, i32>(3)? == 0,
+                            is_primary_key: r.get::<_, i32>(5)? > 0,
+                        })
+                    })?
+                    .filter_map(|r| r.ok())
+                    .collect::<Vec<_>>();
+
+                let primary_key = columns
+                    .iter()
+                    .find(|c| c.is_primary_key)
+                    .map(|c| c.name.clone());
+
+                eyre::Ok((columns, primary_key))
+            })
+            .await??;
+
+            Ok(responses::TableColumns {
+                columns,
+                primary_key,
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            _table_name: String,
+            _row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            Err(color_eyre::eyre::eyre!("CSV files are read-only"))
+        }
+
+        async fn update_row(
+            &self,
+            _table_name: String,
+            _primary_key: String,
+            _key_value: serde_json::Value,
+            _row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            Err(color_eyre::eyre::eyre!("CSV files are read-only"))
+        }
+
+        async fn delete_row(
+            &self,
+            _table_name: String,
+            _primary_key: String,
+            _key_value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            Err(color_eyre::eyre::eyre!("CSV files are read-only"))
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -3850,7 +4675,8 @@ mod clickhouse {
     use std::time::Duration;
 
     use crate::{
-        Database, ROWS_PER_PAGE,
+        Database,
+        helpers,
         responses::{self, Count},
     };
 
@@ -4155,6 +4981,7 @@ mod clickhouse {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let mut columns = self
                 .conn
@@ -4173,12 +5000,18 @@ mod clickhouse {
 
             let first_column = columns.first().ok_or_eyre("no first column found")?;
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let total_rows: i32 = self
+                .conn
+                .query(&format!("SELECT count(*) FROM {name}"))
+                .fetch_one()
+                .await?;
+
+            let offset = (page - 1) * page_size;
             let _sql = format!(
                 r#"
             SELECT {} FROM {name}
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#,
                 columns.join(",")
@@ -4187,7 +5020,85 @@ mod clickhouse {
             Ok(responses::TableData {
                 columns,
                 rows: Vec::new(),
+                total_rows,
+                page,
+                page_size,
             })
+        }
+
+        async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+            let rows = self
+                .conn
+                .query(
+                    r#"
+            SELECT name, type, (is_nullable = 1) as nullable,
+                   (is_in_primary_key = 1) as is_pk
+            FROM system.columns
+            WHERE database = currentDatabase()
+            AND table = ?
+                    "#,
+                )
+                .bind(&name)
+                .fetch_all::<(String, String, bool, bool)>()
+                .await?;
+
+            let columns: Vec<responses::ColumnInfo> = rows
+                .into_iter()
+                .map(|(name, data_type, nullable, is_pk)| responses::ColumnInfo {
+                    name,
+                    data_type,
+                    nullable,
+                    is_primary_key: is_pk,
+                })
+                .collect();
+
+            let primary_key = columns
+                .iter()
+                .find(|c| c.is_primary_key)
+                .map(|c| c.name.clone());
+
+            Ok(responses::TableColumns {
+                columns,
+                primary_key,
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            table_name: String,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let columns: Vec<&str> = row.keys().map(|s| s.as_str()).collect();
+            let values: Vec<String> = row.values().map(|v| helpers::json_to_clickhouse_value(v)).collect();
+
+            let sql = format!(
+                "INSERT INTO {} ({}) VALUES ({})",
+                table_name,
+                columns.join(", "),
+                values.join(", ")
+            );
+
+            self.conn.query(&sql).execute().await?;
+            Ok(())
+        }
+
+        async fn update_row(
+            &self,
+            _table_name: String,
+            _primary_key: String,
+            _key_value: serde_json::Value,
+            _row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            Err(color_eyre::eyre::eyre!("ClickHouse does not support UPDATE operations in the same way as traditional databases"))
+        }
+
+        async fn delete_row(
+            &self,
+            _table_name: String,
+            _primary_key: String,
+            _key_value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            Err(color_eyre::eyre::eyre!("ClickHouse does not support DELETE operations in the same way as traditional databases"))
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -4715,6 +5626,7 @@ mod mssql {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let mut client = self.client.lock().await;
 
@@ -4734,12 +5646,20 @@ mod mssql {
                 .and_then(|row| row.get::<&str, &str>("name").map(ToOwned::to_owned))
                 .ok_or_eyre("couldn't count columns")?;
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let total_rows: i32 = client
+                .query(format!("SELECT count(*) AS count FROM {}", name), &[])
+                .await?
+                .into_row()
+                .await?
+                .and_then(|row| row.get("count"))
+                .ok_or_eyre("couldn't count rows")?;
+
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM "{name}"
             ORDER BY {first_column}
-            OFFSET {offset} ROWS FETCH NEXT {ROWS_PER_PAGE} ROWS ONLY;
+            OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY;
                 "#
             );
 
@@ -4759,7 +5679,132 @@ mod mssql {
                 .collect::<Vec<_>>()
                 .await;
 
-            Ok(responses::TableData { columns, rows })
+            Ok(responses::TableData {
+                columns,
+                rows,
+                total_rows,
+                page,
+                page_size,
+            })
+        }
+
+        async fn table_columns(&self, name: String) -> color_eyre::Result<responses::TableColumns> {
+            let mut client = self.client.lock().await;
+
+            let rows = client
+                .query(
+                    r#"
+            SELECT c.column_name, c.data_type, c.is_nullable,
+                   CASE WHEN kcu.column_name IS NOT NULL THEN 1 ELSE 0 END as is_primary_key
+            FROM information_schema.columns c
+            LEFT JOIN information_schema.table_constraints tc
+                ON c.table_schema = tc.table_schema
+                AND c.table_name = tc.table_name
+                AND tc.constraint_type = 'PRIMARY KEY'
+            LEFT JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND c.column_name = kcu.column_name
+            WHERE c.table_schema = SCHEMA_NAME()
+            AND c.table_name = @P1;
+                    "#,
+                    &[&name],
+                )
+                .await?
+                .into_row_stream()
+                .try_filter_map(|row| {
+                    let name = row.get::<&str, &str>("column_name").map(ToOwned::to_owned);
+                    let data_type = row.get::<&str, &str>("data_type").map(ToOwned::to_owned);
+                    let nullable = row.get::<&str, &str>("is_nullable").map(|s| s == "YES");
+                    let is_pk = row.get::<i32, &str>("is_primary_key").map(|v| v == 1);
+
+                    let out = match (name, data_type, nullable, is_pk) {
+                        (Some(n), Some(dt), Some(nl), Some(pk)) => {
+                            Ok(Some(responses::ColumnInfo {
+                                name: n,
+                                data_type: dt,
+                                nullable: nl,
+                                is_primary_key: pk,
+                            }))
+                        }
+                        _ => Ok(None),
+                    };
+                    async { out }
+                })
+                .filter_map(|r| async { r.ok() })
+                .collect::<Vec<_>>()
+                .await;
+
+            let primary_key = rows
+                .iter()
+                .find(|c| c.is_primary_key)
+                .map(|c| c.name.clone());
+
+            Ok(responses::TableColumns {
+                columns: rows,
+                primary_key,
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            table_name: String,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let mut client = self.client.lock().await;
+            let columns: Vec<&str> = row.keys().map(|s| s.as_str()).collect();
+            let values: Vec<String> = row.values().map(|v| helpers::json_to_mssql_value(v)).collect();
+
+            let sql = format!(
+                r#"INSERT INTO "{}" ({}) VALUES ({})"#,
+                table_name,
+                columns.join(", "),
+                values.join(", ")
+            );
+
+            client.execute(sql, &[]).await?;
+            Ok(())
+        }
+
+        async fn update_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+            row: std::collections::HashMap<String, serde_json::Value>,
+        ) -> color_eyre::Result<()> {
+            let mut client = self.client.lock().await;
+            let set_clauses: Vec<String> = row
+                .iter()
+                .map(|(col, val)| format!(r#""{}" = {}"#, col, helpers::json_to_mssql_value(val)))
+                .collect();
+
+            let sql = format!(
+                r#"UPDATE "{}" SET {} WHERE "{}" = {}"#,
+                table_name,
+                set_clauses.join(", "),
+                primary_key,
+                helpers::json_to_mssql_value(&key_value)
+            );
+
+            client.execute(sql, &[]).await?;
+            Ok(())
+        }
+
+        async fn delete_row(
+            &self,
+            table_name: String,
+            primary_key: String,
+            key_value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let mut client = self.client.lock().await;
+            let sql = format!(
+                r#"DELETE FROM "{}" WHERE "{}" = {}"#,
+                table_name,
+                primary_key,
+                helpers::json_to_mssql_value(&key_value)
+            );
+            client.execute(sql, &[]).await?;
+            Ok(())
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -4986,6 +6031,27 @@ mod helpers {
         }
     }
 
+    pub fn json_to_rusqlite_value(v: serde_json::Value) -> tokio_rusqlite::types::Value {
+        use tokio_rusqlite::types::Value;
+        match v {
+            serde_json::Value::Null => Value::Null,
+            serde_json::Value::Bool(b) => Value::Integer(if b { 1 } else { 0 }),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Value::Integer(i)
+                } else if let Some(f) = n.as_f64() {
+                    Value::Real(f)
+                } else {
+                    Value::Null
+                }
+            }
+            serde_json::Value::String(s) => Value::Text(s),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                Value::Text(v.to_string())
+            }
+        }
+    }
+
     pub fn libsql_value_to_json(v: LibsqlValue) -> serde_json::Value {
         use LibsqlValue::*;
         match v {
@@ -4994,6 +6060,27 @@ mod helpers {
             Real(x) => serde_json::json!(x),
             Text(s) => serde_json::Value::String(s),
             Blob(s) => serde_json::json!(s),
+        }
+    }
+
+    pub fn json_to_libsql_value(v: serde_json::Value) -> libsql::Value {
+        use libsql::Value;
+        match v {
+            serde_json::Value::Null => Value::Null,
+            serde_json::Value::Bool(b) => Value::Integer(if b { 1 } else { 0 }),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Value::Integer(i)
+                } else if let Some(f) = n.as_f64() {
+                    Value::Real(f)
+                } else {
+                    Value::Null
+                }
+            }
+            serde_json::Value::String(s) => Value::Text(s),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                Value::Text(v.to_string())
+            }
         }
     }
 
@@ -5016,6 +6103,67 @@ mod helpers {
             Decimal(x) => serde_json::json!(x),
             Text(_) => serde_json::Value::String(v.as_str().unwrap().to_owned()),
             v => serde_json::Value::String(format!("{v:?}")),
+        }
+    }
+
+    pub fn json_to_postgres_value(v: &serde_json::Value) -> String {
+        match v {
+            serde_json::Value::Null => String::new(),
+            serde_json::Value::Bool(b) => b.to_string(),
+            serde_json::Value::Number(n) => n.to_string(),
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => v.to_string(),
+        }
+    }
+
+    pub fn json_to_mysql_value(v: &serde_json::Value) -> String {
+        match v {
+            serde_json::Value::Null => String::new(),
+            serde_json::Value::Bool(b) => b.to_string(),
+            serde_json::Value::Number(n) => n.to_string(),
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => v.to_string(),
+        }
+    }
+
+    pub fn json_to_duckdb_value(v: serde_json::Value) -> duckdb::types::Value {
+        use duckdb::types::Value;
+        match v {
+            serde_json::Value::Null => Value::Null,
+            serde_json::Value::Bool(b) => Value::Boolean(b),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Value::BigInt(i)
+                } else if let Some(f) = n.as_f64() {
+                    Value::Double(f)
+                } else {
+                    Value::Null
+                }
+            }
+            serde_json::Value::String(s) => Value::Text(s),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                Value::Text(v.to_string())
+            }
+        }
+    }
+
+    pub fn json_to_clickhouse_value(v: &serde_json::Value) -> String {
+        match v {
+            serde_json::Value::Null => "NULL".to_string(),
+            serde_json::Value::Bool(b) => b.to_string(),
+            serde_json::Value::Number(n) => n.to_string(),
+            serde_json::Value::String(s) => format!("'{}'", s.replace("'", "''")),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => format!("'{}'", v.to_string().replace("'", "''")),
+        }
+    }
+
+    pub fn json_to_mssql_value(v: &serde_json::Value) -> String {
+        match v {
+            serde_json::Value::Null => "NULL".to_string(),
+            serde_json::Value::Bool(b) => b.to_string(),
+            serde_json::Value::Number(n) => n.to_string(),
+            serde_json::Value::String(s) => format!("'{}'", s.replace("'", "''")),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => format!("'{}'", v.to_string().replace("'", "''")),
         }
     }
 
@@ -5112,6 +6260,23 @@ mod responses {
     pub struct TableData {
         pub columns: Vec<String>,
         pub rows: Vec<Vec<serde_json::Value>>,
+        pub total_rows: i32,
+        pub page: i32,
+        pub page_size: i32,
+    }
+
+    #[derive(Serialize)]
+    pub struct TableColumns {
+        pub columns: Vec<ColumnInfo>,
+        pub primary_key: Option<String>,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub struct ColumnInfo {
+        pub name: String,
+        pub data_type: String,
+        pub nullable: bool,
+        pub is_primary_key: bool,
     }
 
     #[derive(Serialize)]
@@ -5168,6 +6333,7 @@ mod responses {
 
 mod handlers {
     use serde::Deserialize;
+    use std::collections::HashMap;
     use tokio::sync::mpsc;
     use warp::Filter;
 
@@ -5197,11 +6363,30 @@ mod handlers {
             .and(with_state(&db))
             .and(warp::path!("tables" / String))
             .and_then(table);
+        let table_columns = warp::get()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / String / "columns"))
+            .and_then(table_columns);
         let data = warp::get()
             .and(with_state(&db))
             .and(warp::path!("tables" / String / "data"))
             .and(warp::query::<PageQuery>())
             .and_then(table_data);
+        let insert_row = warp::post()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / String / "rows"))
+            .and(warp::body::json::<InsertRowBody>())
+            .and_then(insert_row);
+        let update_row = warp::put()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / String / "rows"))
+            .and(warp::body::json::<UpdateRowBody>())
+            .and_then(update_row);
+        let delete_row = warp::delete()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / String / "rows"))
+            .and(warp::body::json::<DeleteRowBody>())
+            .and_then(delete_row);
         let autocomplete = warp::path!("autocomplete")
             .and(warp::get())
             .and(with_state(&db))
@@ -5228,9 +6413,13 @@ mod handlers {
         overview
             .or(tables)
             .or(table)
+            .or(table_columns)
             .or(autocomplete)
             .or(query)
             .or(data)
+            .or(insert_row)
+            .or(update_row)
+            .or(delete_row)
             .or(metadata)
             .or(shutdown)
             .or(erd)
@@ -5244,6 +6433,25 @@ mod handlers {
     #[derive(Deserialize)]
     pub struct PageQuery {
         pub page: Option<i32>,
+        pub page_size: Option<i32>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct InsertRowBody {
+        pub row: HashMap<String, serde_json::Value>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct UpdateRowBody {
+        pub primary_key: String,
+        pub key_value: serde_json::Value,
+        pub row: HashMap<String, serde_json::Value>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct DeleteRowBody {
+        pub primary_key: String,
+        pub key_value: serde_json::Value,
     }
 
     async fn overview(db: impl Database) -> Result<impl warp::Reply, warp::Rejection> {
@@ -5275,14 +6483,64 @@ mod handlers {
         name: String,
         data: PageQuery,
     ) -> Result<impl warp::Reply, warp::Rejection> {
-        let data = db
-            .table_data(name, data.page.unwrap_or(1))
+        let page = data.page.unwrap_or(1);
+        let page_size = data.page_size.unwrap_or(50);
+        let data = db.table_data(name, page, page_size).await.map_err(|e| {
+            tracing::error!("error while getting table: {e}");
+            warp::reject::custom(rejections::InternalServerError)
+        })?;
+        Ok(warp::reply::json(&data))
+    }
+
+    async fn table_columns(
+        db: impl Database,
+        name: String,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        let data = db.table_columns(name).await.map_err(|e| {
+            tracing::error!("error while getting table columns: {e}");
+            warp::reject::custom(rejections::InternalServerError)
+        })?;
+        Ok(warp::reply::json(&data))
+    }
+
+    async fn insert_row(
+        db: impl Database,
+        table_name: String,
+        body: InsertRowBody,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        db.insert_row(table_name, body.row).await.map_err(|e| {
+            tracing::error!("error while inserting row: {e}");
+            warp::reject::custom(rejections::InternalServerError)
+        })?;
+        Ok(warp::reply::json(&serde_json::json!({"success": true})))
+    }
+
+    async fn update_row(
+        db: impl Database,
+        table_name: String,
+        body: UpdateRowBody,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        db.update_row(table_name, body.primary_key, body.key_value, body.row)
             .await
             .map_err(|e| {
-                tracing::error!("error while getting table: {e}");
+                tracing::error!("error while updating row: {e}");
                 warp::reject::custom(rejections::InternalServerError)
             })?;
-        Ok(warp::reply::json(&data))
+        Ok(warp::reply::json(&serde_json::json!({"success": true})))
+    }
+
+    async fn delete_row(
+        db: impl Database,
+        table_name: String,
+        body: DeleteRowBody,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        db.delete_row(table_name, body.primary_key, body.key_value)
+            .await
+            .map_err(|e| {
+                tracing::error!("error while deleting row: {e}");
+                warp::reject::custom(rejections::InternalServerError)
+            })?;
+        Ok(warp::reply::json(&serde_json::json!({"success": true})))
     }
 
     async fn autocomplete(db: impl Database) -> Result<impl warp::Reply, warp::Rejection> {

@@ -56,6 +56,21 @@ const table = z.object({
 const tableData = z.object({
   columns: z.string().array(),
   rows: z.any().array().array(),
+  total_rows: z.number(),
+  page: z.number(),
+  page_size: z.number(),
+});
+
+const columnInfo = z.object({
+  name: z.string(),
+  data_type: z.string(),
+  nullable: z.boolean(),
+  is_primary_key: z.boolean(),
+});
+
+const tableColumns = z.object({
+  columns: columnInfo.array(),
+  primary_key: z.string().nullable(),
 });
 
 const query = z.object({
@@ -83,8 +98,10 @@ export const fetchOverview = () => $fetch(overview, `${BASE_URL}/`);
 export const fetchTables = () => $fetch(tables, `${BASE_URL}/tables`);
 export const fetchTable = (name: string) =>
   $fetch(table, `${BASE_URL}/tables/${name}`);
-export const fetchTableData = (name: string, page: number) =>
-  $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}`);
+export const fetchTableData = (name: string, page: number, pageSize: number = 50) =>
+  $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}&page_size=${pageSize}`);
+export const fetchTableColumns = (name: string) =>
+  $fetch(tableColumns, `${BASE_URL}/tables/${name}/columns`);
 export const fetchQuery = (value: string) =>
   $fetch(query, `${BASE_URL}/query`, {
     method: "POST",
@@ -100,6 +117,45 @@ export const fetchAutocomplete = () =>
 
 export const sendShutdown = () =>
   fetch(`${BASE_URL}/shutdown`, { method: "POST" });
+
+export const insertRow = (tableName: string, row: Record<string, unknown>) =>
+  fetch(`${BASE_URL}/tables/${tableName}/rows`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ row }),
+  });
+
+export const updateRow = (
+  tableName: string,
+  primaryKey: string,
+  keyValue: unknown,
+  row: Record<string, unknown>,
+) =>
+  fetch(`${BASE_URL}/tables/${tableName}/rows`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ primary_key: primaryKey, key_value: keyValue, row }),
+  });
+
+export const deleteRow = (
+  tableName: string,
+  primaryKey: string,
+  keyValue: unknown,
+) =>
+  fetch(`${BASE_URL}/tables/${tableName}/rows`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ primary_key: primaryKey, key_value: keyValue }),
+  });
 
 const erdColumn = z.object({
   name: z.string(),
