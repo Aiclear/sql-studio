@@ -83,8 +83,72 @@ export const fetchOverview = () => $fetch(overview, `${BASE_URL}/`);
 export const fetchTables = () => $fetch(tables, `${BASE_URL}/tables`);
 export const fetchTable = (name: string) =>
   $fetch(table, `${BASE_URL}/tables/${name}`);
-export const fetchTableData = (name: string, page: number) =>
-  $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}`);
+export const fetchTableData = (name: string, page: number, pageSize: number = 50) =>
+  $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}&page_size=${pageSize}`);
+
+const primaryKeys = z.object({
+  keys: z.string().array(),
+});
+
+export const fetchPrimaryKeys = (tableName: string) =>
+  $fetch(primaryKeys, `${BASE_URL}/tables/${tableName}/primary-keys`);
+
+const updateResult = z.object({
+  success: z.boolean(),
+  message: z.string().optional(),
+});
+
+export const updateRow = (
+  tableName: string,
+  primaryKeys: Record<string, unknown>,
+  row: Record<string, unknown>,
+) =>
+  $fetch(
+    updateResult,
+    `${BASE_URL}/tables/${tableName}/row`,
+    {
+      method: "PUT",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ primary_keys: primaryKeys, updates: row }),
+    },
+  );
+
+export const insertRow = (
+  tableName: string,
+  row: Record<string, unknown>,
+) =>
+  $fetch(
+    updateResult,
+    `${BASE_URL}/tables/${tableName}/row`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(row),
+    },
+  );
+
+export const deleteRow = (
+  tableName: string,
+  primaryKeys: Record<string, unknown>,
+) =>
+  $fetch(
+    updateResult,
+    `${BASE_URL}/tables/${tableName}/row`,
+    {
+      method: "DELETE",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(primaryKeys),
+    },
+  );
 export const fetchQuery = (value: string) =>
   $fetch(query, `${BASE_URL}/query`, {
     method: "POST",

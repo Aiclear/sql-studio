@@ -5,11 +5,25 @@ import {
   DatabaseZap,
   TableProperties,
   Table as TableIcon,
+  Plus,
+  Copy,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
 import { z } from "zod";
-import { DataGrid } from "react-data-grid";
+import {
+  DataGrid,
+  Column,
+  RowsChangeData,
+  RenderEditCellProps,
+  RenderCellProps,
+} from "react-data-grid";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CodeBlock, irBlack as CodeDarkTheme } from "react-code-blocks";
 
 import { cn } from "@/lib/utils";
@@ -19,9 +33,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/provider/theme.provider";
-import { fetchTable, fetchTableData, fetchTables } from "@/api";
+import {
+  fetchTable,
+  fetchTableData,
+  fetchTables,
+  fetchPrimaryKeys,
+  updateRow,
+  insertRow,
+  deleteRow,
+} from "@/api";
 import { InfoCard, InfoCardProps } from "@/components/info-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -167,7 +197,7 @@ function Table({ name }: Props) {
       )}
 
       <Card className="p-2">
-        <TableData name={data.name} />
+        <EditableTableData name={data.name} rowCount={data.row_count} />
       </Card>
     </div>
   );
@@ -194,54 +224,326 @@ function TableSkeleton() {
   );
 }
 
-function isAtBottom({ currentTarget }: React.UIEvent<HTMLDivElement>): boolean {
-  return (
-    currentTarget.scrollTop + 10 >=
-    currentTarget.scrollHeight - currentTarget.clientHeight
-  );
+interface DataRow {
+  id: number;
+  [key: string]: unknown;
 }
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
 
 type TableDataProps = {
   name: string;
+  rowCount: number;
 };
-function TableData({ name }: TableDataProps) {
+
+function EditableTableData({ name, rowCount }: TableDataProps) {
   const currentTheme = useTheme();
-  const { isLoading, data, fetchNextPage, hasNextPage } = useInfiniteQuery({
-    queryKey: ["tables", "data", name],
-    queryFn: ({ pageParam }) => fetchTableData(name, pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, _, lastPageParams) => {
-      if (lastPage.rows.length === 0) return undefined;
-      return lastPageParams + 1;
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [copiedRowData, setCopiedRowData] = useState<Record<string, unknown> | null>(null);
+
+  const totalPages = Math.ceil(rowCount / pageSize);
+
+  const { data: primaryKeysData } = useQuery({
+    queryKey: ["tables", "primary-keys", name],
+    queryFn: () => fetchPrimaryKeys(name),
+  });
+
+  const { data } = useQuery({
+    queryKey: ["tables", "data", name, page, pageSize],
+    queryFn: () => fetchTableData(name, page, pageSize),
+  });
+
+  const primaryKeyColumns = useMemo(() => {
+    if (!primaryKeysData) return [] as string[];
+    return primaryKeysData.keys;
+  }, [primaryKeysData]);
+
+  const updateMutation = useMutation({
+    mutationFn: (params: {
+      primaryKeys: Record<string, unknown>;
+      row: Record<string, unknown>;
+    }) => updateRow(name, params.primaryKeys, params.row),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables", "data", name], type: "all" });
     },
   });
 
+  const insertMutation = useMutation({
+    mutationFn: (row: Record<string, unknown>) => insertRow(name, row),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables", "data", name], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["tables"] });
+      setEditingRow(null);
+      setCopiedRowData(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (primaryKeys: Record<string, unknown>) =>
+      deleteRow(name, primaryKeys),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables", "data", name], type: "all" });
+      queryClient.invalidateQueries({ queryKey: ["tables"] });
+    },
+  });
+
+  const rows = useMemo(() => {
+    if (!data) return [] as DataRow[];
+    const result: DataRow[] = data.rows.map((row, idx) => {
+      const obj: DataRow = { id: idx };
+      data.columns.forEach((col, i) => {
+        obj[col] = row[i];
+      });
+      return obj;
+    });
+
+    if (editingRow !== null && editingRow >= result.length) {
+      const newRow: DataRow = { id: editingRow };
+      data.columns.forEach((col) => {
+        if (copiedRowData && copiedRowData[col] !== undefined) {
+          newRow[col] = copiedRowData[col];
+        } else {
+          newRow[col] = "";
+        }
+      });
+      result.push(newRow);
+    }
+
+    return result;
+  }, [data, editingRow, copiedRowData]);
+
+  const getRowPrimaryKeys = useCallback(
+    (row: DataRow): Record<string, unknown> => {
+      const keys: Record<string, unknown> = {};
+      primaryKeyColumns.forEach((col) => {
+        keys[col] = row[col];
+      });
+      return keys;
+    },
+    [primaryKeyColumns],
+  );
+
+  const handleCopyRow = useCallback(
+    (rowIndex: number) => {
+      if (!data) return;
+      if (rowIndex < 0 || rowIndex >= rows.length) return;
+      const sourceRow = rows[rowIndex];
+      const newRowData: Record<string, unknown> = {};
+      Object.keys(sourceRow)
+        .filter((k) => k !== "id")
+        .forEach((k) => {
+          if (!primaryKeyColumns.includes(k)) {
+            newRowData[k] = sourceRow[k];
+          }
+        });
+      setCopiedRowData(newRowData);
+      setEditingRow(data.rows.length);
+    },
+    [data, rows, primaryKeyColumns],
+  );
+
+  const handleDeleteRow = useCallback(
+    (rowIndex: number) => {
+      if (rowIndex < 0 || rowIndex >= rows.length) return;
+      const row = rows[rowIndex];
+      const primaryKeys = getRowPrimaryKeys(row);
+      deleteMutation.mutate(primaryKeys);
+    },
+    [rows, getRowPrimaryKeys, deleteMutation],
+  );
+
+  const columns: Column<DataRow, unknown>[] = useMemo(() => {
+    if (!data) return [];
+    const actionColumn: Column<DataRow, unknown> = {
+      key: "__actions__",
+      name: "Actions",
+      width: 80,
+      frozen: true,
+      resizable: false,
+      renderCell: (props: RenderCellProps<DataRow>) => {
+        const rowIdx = rows.findIndex((r) => r.id === props.row.id);
+        if (rowIdx < 0 || rowIdx >= data.rows.length) return null;
+        return (
+          <div className="flex items-center gap-1 h-full">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              onClick={() => handleCopyRow(rowIdx)}
+              title="Copy this row"
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 text-destructive hover:text-destructive"
+              onClick={() => handleDeleteRow(rowIdx)}
+              title="Delete this row"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        );
+      },
+    };
+    const dataColumns = data.columns.map((col) => ({
+      key: col,
+      name: col,
+      editable: true,
+      resizable: true,
+      renderEditCell: (props: RenderEditCellProps<DataRow>) => (
+        <input
+          autoFocus
+          className="w-full h-full bg-transparent px-1 outline-none"
+          value={props.row[props.column.key] as string}
+          onChange={(e) =>
+            props.onRowChange({
+              ...props.row,
+              [props.column.key]: e.target.value,
+            })
+          }
+          onBlur={() => props.onClose(true)}
+        />
+      ),
+    }));
+    return [actionColumn, ...dataColumns];
+  }, [data, rows, handleCopyRow, handleDeleteRow]);
+
+  const handleRowsChange = useCallback(
+    (newRows: readonly DataRow[], details: RowsChangeData<DataRow>) => {
+      const rowIndex = details.indexes[0];
+      const column = details.column.key;
+      const newRow = newRows[rowIndex];
+      const oldRow = rows[rowIndex];
+
+      if (rowIndex < rows.length) {
+        const changes: Record<string, unknown> = {};
+        changes[column] = newRow[column];
+
+        const primaryKeys = getRowPrimaryKeys(oldRow);
+        updateMutation.mutate({ primaryKeys, row: changes });
+      } else {
+        const newRowData: Record<string, unknown> = {};
+        Object.keys(newRow)
+          .filter((k) => k !== "id")
+          .forEach((k) => {
+            const value = newRow[k];
+            if (value !== "" && value !== null && value !== undefined) {
+              newRowData[k] = value;
+            }
+          });
+        if (Object.keys(newRowData).length > 0) {
+          insertMutation.mutate(newRowData);
+        }
+        setCopiedRowData(null);
+      }
+    },
+    [rows, getRowPrimaryKeys, updateMutation, insertMutation],
+  );
+
+  const handleAddRow = () => {
+    if (data) {
+      setCopiedRowData(null);
+      setEditingRow(data.rows.length);
+    }
+  };
+
+  const handlePageSizeChange = (value: string) => {
+    const newSize = parseInt(value, 10);
+    setPageSize(newSize);
+    setPage(1);
+  };
+
+  const goToPage = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+    }
+  };
+
   if (!data) return <Skeleton className="h-[400px]" />;
 
-  function handleScroll(event: React.UIEvent<HTMLDivElement>) {
-    if (isLoading || !isAtBottom(event) || !hasNextPage) return;
-    fetchNextPage();
-  }
-
-  const columns = data.pages[0].columns.map((col) => ({ key: col, name: col }));
-
-  const grouped = data.pages.map((page) =>
-    page.rows.map((row) =>
-      row.reduce((acc, curr, i) => {
-        acc[page.columns[i]] = curr;
-        return acc;
-      }, {}),
-    ),
-  ) as never[][];
-  const rows = [].concat(...grouped);
-
   return (
-    <DataGrid
-      rows={rows}
-      columns={columns}
-      onScroll={handleScroll}
-      defaultColumnOptions={{ resizable: true }}
-      className={cn(currentTheme === "light" ? "rdg-light" : "rdg-dark")}
-    />
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={handleAddRow} variant="default">
+            <Plus className="h-4 w-4 mr-1" />
+            Add Row
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page} of {totalPages} ({rowCount.toLocaleString()} rows)
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Rows per page:</span>
+          <Select
+            value={pageSize.toString()}
+            onValueChange={handlePageSizeChange}
+          >
+            <SelectTrigger className="w-20 h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={size.toString()}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-1 ml-2">
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              onClick={() => goToPage(1)}
+              disabled={page === 1}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              onClick={() => goToPage(page - 1)}
+              disabled={page === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              onClick={() => goToPage(page + 1)}
+              disabled={page === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              onClick={() => goToPage(totalPages)}
+              disabled={page === totalPages}
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <DataGrid
+        columns={columns}
+        rows={rows}
+        onRowsChange={handleRowsChange}
+        defaultColumnOptions={{ resizable: true }}
+        className={cn(currentTheme === "light" ? "rdg-light" : "rdg-dark")}
+        rowKeyGetter={(row) => row.id}
+      />
+    </div>
   );
 }
