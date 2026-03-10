@@ -83,8 +83,38 @@ export const fetchOverview = () => $fetch(overview, `${BASE_URL}/`);
 export const fetchTables = () => $fetch(tables, `${BASE_URL}/tables`);
 export const fetchTable = (name: string) =>
   $fetch(table, `${BASE_URL}/tables/${name}`);
-export const fetchTableData = (name: string, page: number) =>
-  $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}`);
+export const fetchTableData = (name: string, page: number, pageSize?: number) => {
+  let url = `${BASE_URL}/tables/${name}/data?page=${page}`;
+  if (pageSize) {
+    url += `&page_size=${pageSize}`;
+  }
+  return $fetch(tableData, url);
+};
+
+export const updateTableCell = (
+  tableName: string,
+  rowId: number,
+  columnName: string,
+  value: any,
+) =>
+  fetch(`${BASE_URL}/tables/${tableName}/data`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ row_id: rowId, column_name: columnName, value }),
+  });
+
+export const insertTableRow = (tableName: string, data: Record<string, any>) =>
+  fetch(`${BASE_URL}/tables/${tableName}/data`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ data }),
+  });
 export const fetchQuery = (value: string) =>
   $fetch(query, `${BASE_URL}/query`, {
     method: "POST",

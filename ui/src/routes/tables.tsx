@@ -1,3 +1,4 @@
+import React from "react";
 import "react-data-grid/lib/styles.css";
 
 import {
@@ -5,11 +6,15 @@ import {
   DatabaseZap,
   TableProperties,
   Table as TableIcon,
+  Plus,
+  Copy,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { z } from "zod";
-import { DataGrid } from "react-data-grid";
+import { DataGrid, textEditor } from "react-data-grid";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CodeBlock, irBlack as CodeDarkTheme } from "react-code-blocks";
 
 import { cn } from "@/lib/utils";
@@ -21,9 +26,11 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTheme } from "@/provider/theme.provider";
-import { fetchTable, fetchTableData, fetchTables } from "@/api";
+import { fetchTable, fetchTableData, fetchTables, updateTableCell, insertTableRow } from "@/api";
 import { InfoCard, InfoCardProps } from "@/components/info-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/tables")({
   component: Tables,
@@ -194,54 +201,190 @@ function TableSkeleton() {
   );
 }
 
-function isAtBottom({ currentTarget }: React.UIEvent<HTMLDivElement>): boolean {
-  return (
-    currentTarget.scrollTop + 10 >=
-    currentTarget.scrollHeight - currentTarget.clientHeight
-  );
-}
-
 type TableDataProps = {
   name: string;
 };
 function TableData({ name }: TableDataProps) {
   const currentTheme = useTheme();
-  const { isLoading, data, fetchNextPage, hasNextPage } = useInfiniteQuery({
-    queryKey: ["tables", "data", name],
-    queryFn: ({ pageParam }) => fetchTableData(name, pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, _, lastPageParams) => {
-      if (lastPage.rows.length === 0) return undefined;
-      return lastPageParams + 1;
+  const queryClient = useQueryClient();
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(50);
+  const [editingRow, setEditingRow] = React.useState<Record<string, any> | null>(null);
+
+  const { data } = useQuery({
+    queryKey: ["tables", "data", name, page, pageSize],
+    queryFn: () => fetchTableData(name, page, pageSize),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ rowId, columnName, value }: { rowId: number; columnName: string; value: any }) =>
+      updateTableCell(name, rowId, columnName, value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables", "data", name] });
+    },
+  });
+
+  const insertMutation = useMutation({
+    mutationFn: (rowData: Record<string, any>) => insertTableRow(name, rowData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables", "data", name] });
+      setEditingRow(null);
     },
   });
 
   if (!data) return <Skeleton className="h-[400px]" />;
 
-  function handleScroll(event: React.UIEvent<HTMLDivElement>) {
-    if (isLoading || !isAtBottom(event) || !hasNextPage) return;
-    fetchNextPage();
-  }
+  const columns = data.columns.map((col) => ({
+    key: col,
+    name: col,
+    editable: true,
+    editor: textEditor,
+  }));
 
-  const columns = data.pages[0].columns.map((col) => ({ key: col, name: col }));
+  const rows = data.rows.map((row, index) =>
+    row.reduce((acc, curr, i) => {
+      acc[data.columns[i]] = curr;
+      acc.id = index;
+      return acc;
+    }, {} as Record<string, any>),
+  );
 
-  const grouped = data.pages.map((page) =>
-    page.rows.map((row) =>
-      row.reduce((acc, curr, i) => {
-        acc[page.columns[i]] = curr;
-        return acc;
-      }, {}),
-    ),
-  ) as never[][];
-  const rows = [].concat(...grouped);
+  const handleRowsChange = (newRows: Record<string, any>[]) => {
+    const changedRow = newRows.find((row, index) => {
+      const originalRow = rows[index];
+      return originalRow && JSON.stringify(row) !== JSON.stringify(originalRow);
+    });
+
+    if (changedRow) {
+      const rowId = changedRow.rowid || changedRow.id;
+      if (rowId !== undefined && rowId !== null && typeof rowId === 'number') {
+        const originalRow = rows.find(r => (r.rowid || r.id) === rowId);
+        if (originalRow) {
+          for (const key of Object.keys(changedRow)) {
+            if (changedRow[key] !== originalRow[key]) {
+              updateMutation.mutate({ rowId, columnName: key, value: changedRow[key] });
+              break;
+            }
+          }
+        }
+      }
+    }
+  };
+
+  const handleAddRow = () => {
+    const newRow: Record<string, any> = { id: "new" };
+    data.columns.forEach((col) => {
+      newRow[col] = "";
+    });
+    setEditingRow(newRow);
+  };
+
+  const handleCopyRow = (row: Record<string, any>) => {
+    const copiedRow: Record<string, any> = { id: "new" };
+    data.columns.forEach((col) => {
+      if (col !== "rowid" && col !== "id") {
+        copiedRow[col] = row[col] ?? "";
+      }
+    });
+    setEditingRow(copiedRow);
+  };
+
+  const handleSaveNewRow = () => {
+    if (editingRow) {
+      const rowData = { ...editingRow };
+      delete rowData.id;
+      insertMutation.mutate(rowData);
+    }
+  };
+
+  const allRows = editingRow ? [...rows, editingRow] : rows;
 
   return (
-    <DataGrid
-      rows={rows}
-      columns={columns}
-      onScroll={handleScroll}
-      defaultColumnOptions={{ resizable: true }}
-      className={cn(currentTheme === "light" ? "rdg-light" : "rdg-dark")}
-    />
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-between items-center">
+        <div className="flex gap-2">
+          <Button onClick={handleAddRow} size="sm">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Row
+          </Button>
+          {editingRow && (
+            <Button onClick={handleSaveNewRow} size="sm" variant="default">
+              Save New Row
+            </Button>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Page Size:</span>
+            <Select
+              value={pageSize.toString()}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              size="sm"
+              variant="ghost"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm">Page {page}</span>
+            <Button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={data.rows.length < pageSize}
+              size="sm"
+              variant="ghost"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <DataGrid
+        rows={allRows}
+        columns={[
+          ...columns,
+          {
+            key: "actions",
+            name: "Actions",
+            width: 100,
+            renderCell: ({ row }) => (
+              <div className="flex gap-1">
+                {row.id !== "new" && (
+                  <Button
+                    onClick={() => handleCopyRow(row)}
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ),
+          },
+        ]}
+        onRowsChange={handleRowsChange}
+        defaultColumnOptions={{ resizable: true }}
+        className={cn(currentTheme === "light" ? "rdg-light" : "rdg-dark")}
+        style={{ height: "500px" }}
+      />
+    </div>
   );
 }
