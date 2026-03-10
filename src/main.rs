@@ -335,6 +335,7 @@ trait Database: Sized + Clone + Send {
         &self,
         name: String,
         page: i32,
+        page_size: i32,
     ) -> impl std::future::Future<Output = color_eyre::Result<responses::TableData>> + Send;
 
     fn tables_with_columns(
@@ -347,6 +348,20 @@ trait Database: Sized + Clone + Send {
     ) -> impl std::future::Future<Output = color_eyre::Result<responses::Query>> + Send;
 
     fn erd(&self) -> impl std::future::Future<Output = color_eyre::Result<responses::Erd>> + Send;
+
+    fn update_table_cell(
+        &self,
+        table_name: String,
+        row_id: i64,
+        column_name: String,
+        value: serde_json::Value,
+    ) -> impl std::future::Future<Output = color_eyre::Result<()>> + Send;
+
+    fn insert_table_row(
+        &self,
+        table_name: String,
+        data: serde_json::Map<String, serde_json::Value>,
+    ) -> impl std::future::Future<Output = color_eyre::Result<i64>> + Send;
 }
 
 #[derive(Clone)]
@@ -409,17 +424,18 @@ impl Database for AllDbs {
         &self,
         name: String,
         page: i32,
+        page_size: i32,
     ) -> color_eyre::Result<responses::TableData> {
         match self {
-            AllDbs::Sqlite(x) => x.table_data(name, page).await,
-            AllDbs::Libsql(x) => x.table_data(name, page).await,
-            AllDbs::Postgres(x) => x.table_data(name, page).await,
-            AllDbs::Mysql(x) => x.table_data(name, page).await,
-            AllDbs::Duckdb(x) => x.table_data(name, page).await,
-            AllDbs::Parquet(x) => x.table_data(name, page).await,
-            AllDbs::Csv(x) => x.table_data(name, page).await,
-            AllDbs::Clickhouse(x) => x.table_data(name, page).await,
-            AllDbs::MsSql(x) => x.table_data(name, page).await,
+            AllDbs::Sqlite(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Libsql(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Postgres(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Mysql(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Duckdb(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Parquet(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Csv(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Clickhouse(x) => x.table_data(name, page, page_size).await,
+            AllDbs::MsSql(x) => x.table_data(name, page, page_size).await,
         }
     }
 
@@ -462,6 +478,44 @@ impl Database for AllDbs {
             AllDbs::Csv(x) => x.erd().await,
             AllDbs::Clickhouse(x) => x.erd().await,
             AllDbs::MsSql(x) => x.erd().await,
+        }
+    }
+
+    async fn update_table_cell(
+        &self,
+        table_name: String,
+        row_id: i64,
+        column_name: String,
+        value: serde_json::Value,
+    ) -> color_eyre::Result<()> {
+        match self {
+            AllDbs::Sqlite(x) => x.update_table_cell(table_name, row_id, column_name, value).await,
+            AllDbs::Libsql(x) => x.update_table_cell(table_name, row_id, column_name, value).await,
+            AllDbs::Postgres(x) => x.update_table_cell(table_name, row_id, column_name, value).await,
+            AllDbs::Mysql(x) => x.update_table_cell(table_name, row_id, column_name, value).await,
+            AllDbs::Duckdb(x) => x.update_table_cell(table_name, row_id, column_name, value).await,
+            AllDbs::Parquet(x) => x.update_table_cell(table_name, row_id, column_name, value).await,
+            AllDbs::Csv(x) => x.update_table_cell(table_name, row_id, column_name, value).await,
+            AllDbs::Clickhouse(x) => x.update_table_cell(table_name, row_id, column_name, value).await,
+            AllDbs::MsSql(x) => x.update_table_cell(table_name, row_id, column_name, value).await,
+        }
+    }
+
+    async fn insert_table_row(
+        &self,
+        table_name: String,
+        data: serde_json::Map<String, serde_json::Value>,
+    ) -> color_eyre::Result<i64> {
+        match self {
+            AllDbs::Sqlite(x) => x.insert_table_row(table_name, data).await,
+            AllDbs::Libsql(x) => x.insert_table_row(table_name, data).await,
+            AllDbs::Postgres(x) => x.insert_table_row(table_name, data).await,
+            AllDbs::Mysql(x) => x.insert_table_row(table_name, data).await,
+            AllDbs::Duckdb(x) => x.insert_table_row(table_name, data).await,
+            AllDbs::Parquet(x) => x.insert_table_row(table_name, data).await,
+            AllDbs::Csv(x) => x.insert_table_row(table_name, data).await,
+            AllDbs::Clickhouse(x) => x.insert_table_row(table_name, data).await,
+            AllDbs::MsSql(x) => x.insert_table_row(table_name, data).await,
         }
     }
 }
@@ -765,6 +819,7 @@ mod sqlite {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             Ok(self
                 .conn
@@ -774,13 +829,13 @@ mod sqlite {
                             r.get::<_, String>(1)
                         })?;
 
-                    let offset = (page - 1) * ROWS_PER_PAGE;
+                    let offset = (page - 1) * page_size;
                     let mut stmt = conn.prepare(&format!(
                         r#"
                         SELECT *
                         FROM '{name}'
                         ORDER BY {first_column}
-                        LIMIT {ROWS_PER_PAGE}
+                        LIMIT {page_size}
                         OFFSET {offset}
                         "#
                     ))?;
@@ -931,6 +986,143 @@ mod sqlite {
                     })
                 })
                 .await?)
+        }
+
+        async fn update_table_cell(
+            &self,
+            table_name: String,
+            row_id: i64,
+            column_name: String,
+            value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            self.conn
+                .call(move |conn| {
+                    // 获取表的主键列名
+                    let pk_column = conn.query_row(
+                        &format!("PRAGMA table_info('{table_name}')"),
+                        [],
+                        |r| {
+                            let is_pk: i32 = r.get(5)?;
+                            if is_pk == 1 {
+                                Ok(Some(r.get::<_, String>(1)?))
+                            } else {
+                                Ok(None)
+                            }
+                        },
+                    )?;
+
+                    let pk_column = pk_column.ok_or_else(|| {
+                        tokio_rusqlite::Error::Other(color_eyre::eyre::eyre!("未找到主键列").into())
+                    })?;
+
+                    // 使用参数化查询
+                    let sql = format!(
+                        "UPDATE '{table_name}' SET '{column_name}' = ?1 WHERE {pk_column} = ?2"
+                    );
+
+                    // 将JSON值转换为SQLite兼容的格式
+                    let sql_value = match value {
+                        serde_json::Value::Null => tokio_rusqlite::types::Value::Null,
+                        serde_json::Value::Bool(b) => tokio_rusqlite::types::Value::Integer(if b { 1 } else { 0 }),
+                        serde_json::Value::Number(n) => {
+                            if let Some(i) = n.as_i64() {
+                                tokio_rusqlite::types::Value::Integer(i)
+                            } else if let Some(f) = n.as_f64() {
+                                tokio_rusqlite::types::Value::Real(f)
+                            } else {
+                                tokio_rusqlite::types::Value::Text(n.to_string())
+                            }
+                        }
+                        serde_json::Value::String(s) => tokio_rusqlite::types::Value::Text(s),
+                        serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                            return Err(tokio_rusqlite::Error::Other(color_eyre::eyre::eyre!("不支持的数值类型").into()));
+                        }
+                    };
+
+                    conn.execute(&sql, (&sql_value, &row_id))?;
+                    Ok(())
+                })
+                .await?;
+
+            Ok(())
+        }
+
+        async fn insert_table_row(
+            &self,
+            table_name: String,
+            data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<i64> {
+            let row_id = self
+                .conn
+                .call(move |conn| {
+                    // 获取表的主键列名，排除自增主键
+                    let mut stmt = conn.prepare(&format!("PRAGMA table_info('{table_name}')"))?;
+                    let mut pk_columns = Vec::new();
+                    let mut rows = stmt.query([])?;
+                    
+                    while let Some(row) = rows.next()? {
+                        let is_pk: i32 = row.get(5)?;
+                        let is_autoinc: i32 = row.get(6)?;
+                        if is_pk == 1 && is_autoinc == 0 {
+                            let col_name: String = row.get(1)?;
+                            pk_columns.push(col_name);
+                        }
+                    }
+
+                    // 过滤掉自增主键列（值为null或空的主键列）
+                    let mut filtered_data = serde_json::Map::new();
+                    for (key, value) in data {
+                        // 如果是主键列且值为空或null，跳过（让数据库自动生成）
+                        let is_pk_and_empty = pk_columns.contains(&key) && 
+                            (value.is_null() || value.as_str().map_or(false, |s| s.is_empty()));
+                        if !is_pk_and_empty {
+                            filtered_data.insert(key, value);
+                        }
+                    }
+
+                    let columns: Vec<String> = filtered_data.keys().cloned().collect();
+                    let placeholders: Vec<String> = (1..=filtered_data.len()).map(|i| format!("?{i}")).collect();
+
+                    let columns_str = columns
+                        .iter()
+                        .map(|c| format!("'{c}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let placeholders_str = placeholders.join(", ");
+
+                    let sql = format!(
+                        "INSERT INTO '{table_name}' ({columns_str}) VALUES ({placeholders_str})"
+                    );
+
+                    // 准备参数
+                    let mut params = Vec::new();
+                    for value in filtered_data.values() {
+                        let param = match value {
+                            serde_json::Value::Null => tokio_rusqlite::types::Value::Null,
+                            serde_json::Value::Bool(b) => tokio_rusqlite::types::Value::Integer(if *b { 1 } else { 0 }),
+                            serde_json::Value::Number(n) => {
+                                if let Some(i) = n.as_i64() {
+                                    tokio_rusqlite::types::Value::Integer(i)
+                                } else if let Some(f) = n.as_f64() {
+                                    tokio_rusqlite::types::Value::Real(f)
+                                } else {
+                                    tokio_rusqlite::types::Value::Text(n.to_string())
+                                }
+                            }
+                            serde_json::Value::String(s) => tokio_rusqlite::types::Value::Text(s.clone()),
+                            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                                return Err(tokio_rusqlite::Error::Other(color_eyre::eyre::eyre!("不支持的数值类型").into()));
+                            }
+                        };
+                        params.push(param);
+                    }
+
+                    conn.execute(&sql, params.iter().map(|p| p as &dyn tokio_rusqlite::ToSql).collect::<Vec<_>>().as_slice())?;
+                    Ok(conn.last_insert_rowid())
+                })
+                .await?;
+
+            Ok(row_id)
         }
     }
 }
@@ -1348,6 +1540,7 @@ mod libsql {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let conn = self.db.connect()?;
 
@@ -1372,7 +1565,7 @@ mod libsql {
                 .collect::<Vec<_>>();
 
             let columns_len = columns.len();
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let rows = conn
                 .query(
                     &format!(
@@ -1380,7 +1573,7 @@ mod libsql {
                 SELECT *
                 FROM '{name}'
                 ORDER BY {first_column}
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset}
                         "#,
                     ),
@@ -1404,6 +1597,89 @@ mod libsql {
                 .collect::<Vec<_>>();
 
             Ok(responses::TableData { columns, rows })
+        }
+
+        async fn update_table_cell(
+            &self,
+            table_name: String,
+            row_id: i64,
+            column_name: String,
+            value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let conn = self.db.connect()?;
+
+            // Get primary key column name
+            let pk_column = conn
+                .query(&format!("PRAGMA table_info('{table_name}')"), ())
+                .await?
+                .next()
+                .await?
+                .ok_or_eyre("no row returned from db")?
+                .get::<String>(1)?;
+
+            // Convert JSON value to SQL format
+            let sql_value = match value {
+                serde_json::Value::Null => "NULL".to_string(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                serde_json::Value::Number(n) => n.to_string(),
+                serde_json::Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                    return Err(color_eyre::eyre::eyre!("不支持的数值类型"));
+                }
+            };
+
+            let sql = format!(
+                "UPDATE '{table_name}' SET '{column_name}' = {sql_value} WHERE {pk_column} = ?1"
+            );
+
+            conn.execute(&sql, [row_id]).await?;
+            Ok(())
+        }
+
+        async fn insert_table_row(
+            &self,
+            table_name: String,
+            data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<i64> {
+            let conn = self.db.connect()?;
+
+            let columns: Vec<String> = data.keys().cloned().collect();
+            let mut values = Vec::with_capacity(data.len());
+
+            for value in data.values() {
+                let sql_value = match value {
+                    serde_json::Value::Null => "NULL".to_string(),
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                    serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                        return Err(color_eyre::eyre::eyre!("不支持的数值类型"));
+                    }
+                };
+                values.push(sql_value);
+            }
+
+            let columns_str = columns
+                .iter()
+                .map(|c| format!("'{c}'"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let values_str = values.join(", ");
+
+            let sql = format!(
+                "INSERT INTO '{table_name}' ({columns_str}) VALUES ({values_str})"
+            );
+
+            conn.execute(&sql, ()).await?;
+            let row_id = conn
+                .query("SELECT last_insert_rowid()", ())
+                .await?
+                .next()
+                .await?
+                .ok_or_eyre("no row returned from db")?
+                .get::<i64>(0)?;
+
+            Ok(row_id)
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -1946,6 +2222,7 @@ mod postgres {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let schema = &self.schema;
 
@@ -1966,12 +2243,12 @@ mod postgres {
                 .await?
                 .get(0);
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM "{name}"
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#
             );
@@ -2093,6 +2370,99 @@ mod postgres {
                 .collect::<Vec<_>>();
 
             Ok(responses::Query { columns, rows })
+        }
+
+        async fn update_table_cell(
+            &self,
+            table_name: String,
+            row_id: i64,
+            column_name: String,
+            value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let schema = &self.schema;
+
+            // Get primary key column name
+            let pk_column: String = self
+                .client
+                .query_one(
+                    &format!(
+                        r#"
+                SELECT kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                WHERE tc.constraint_type = 'PRIMARY KEY'
+                    AND tc.table_schema = '{schema}'
+                    AND tc.table_name = '{table_name}'
+                LIMIT 1
+                        "#
+                    ),
+                    &[],
+                )
+                .await?
+                .get(0);
+
+            // Convert JSON value to SQL format
+            let sql_value = match value {
+                serde_json::Value::Null => "NULL".to_string(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                serde_json::Value::Number(n) => n.to_string(),
+                serde_json::Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                    return Err(color_eyre::eyre::eyre!("不支持的数值类型"));
+                }
+            };
+
+            let sql = format!(
+                "UPDATE \"{table_name}\" SET \"{column_name}\" = {sql_value} WHERE {pk_column} = $1"
+            );
+
+            self.client.execute(&sql, &[&row_id]).await?;
+            Ok(())
+        }
+
+        async fn insert_table_row(
+            &self,
+            table_name: String,
+            data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<i64> {
+            let schema = &self.schema;
+
+            let columns: Vec<String> = data.keys().cloned().collect();
+            let mut values = Vec::with_capacity(data.len());
+
+            for value in data.values() {
+                let sql_value = match value {
+                    serde_json::Value::Null => "NULL".to_string(),
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                    serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                        return Err(color_eyre::eyre::eyre!("不支持的数值类型"));
+                    }
+                };
+                values.push(sql_value);
+            }
+
+            let columns_str = columns
+                .iter()
+                .map(|c| format!("\"{c}\""))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let values_str = values.join(", ");
+
+            let sql = format!(
+                "INSERT INTO \"{table_name}\" ({columns_str}) VALUES ({values_str}) RETURNING *"
+            );
+
+            let row_id: i64 = self
+                .client
+                .query_one(&sql, &[])
+                .await?
+                .get(0);
+
+            Ok(row_id)
         }
 
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
@@ -2484,6 +2854,7 @@ mod mysql {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let mut conn = self.pool.get_conn().await?;
 
@@ -2499,12 +2870,12 @@ mod mysql {
             .map(|count: String| count)
             .ok_or_eyre("couldn't get first column")?;
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM {name}
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#
             );
@@ -2702,6 +3073,96 @@ mod mysql {
                 tables,
                 relationships,
             })
+        }
+
+        async fn update_table_cell(
+            &self,
+            table_name: String,
+            row_id: i64,
+            column_name: String,
+            value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let mut conn = self.pool.get_conn().await?;
+
+            // Get primary key column name
+            let pk_column = r#"
+            SELECT COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name
+            AND CONSTRAINT_NAME = 'PRIMARY' LIMIT 1
+                "#
+            .with(params! {
+                "table_name" => &table_name
+            })
+            .first(&mut conn)
+            .await?
+            .map(|col: String| col)
+            .ok_or_eyre("表没有主键，无法更新数据")?;
+
+            // Convert JSON value to SQL format
+            let sql_value = match value {
+                serde_json::Value::Null => "NULL".to_string(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                serde_json::Value::Number(n) => n.to_string(),
+                serde_json::Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                    return Err(color_eyre::eyre::eyre!("不支持的数值类型"));
+                }
+            };
+
+            let sql = format!(
+                "UPDATE {table_name} SET {column_name} = {sql_value} WHERE {pk_column} = :row_id"
+            );
+
+            sql.with(params! {
+                "row_id" => row_id
+            })
+            .run(&mut conn)
+            .await?;
+
+            Ok(())
+        }
+
+        async fn insert_table_row(
+            &self,
+            table_name: String,
+            data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<i64> {
+            let mut conn = self.pool.get_conn().await?;
+
+            let columns: Vec<String> = data.keys().cloned().collect();
+            let mut values = Vec::with_capacity(data.len());
+
+            for value in data.values() {
+                let sql_value = match value {
+                    serde_json::Value::Null => "NULL".to_string(),
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                    serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                        return Err(color_eyre::eyre::eyre!("不支持的数值类型"));
+                    }
+                };
+                values.push(sql_value);
+            }
+
+            let columns_str = columns.join(", ");
+            let values_str = values.join(", ");
+
+            let sql = format!(
+                "INSERT INTO {table_name} ({columns_str}) VALUES ({values_str})"
+            );
+
+            sql.with(()).run(&mut conn).await?;
+
+            // Get last inserted ID
+            let row_id = "SELECT LAST_INSERT_ID()"
+                .with(())
+                .first(&mut conn)
+                .await?
+                .map(|id: i64| id)
+                .ok_or_eyre("无法获取新插入行的ID")?;
+
+            Ok(row_id)
         }
     }
 }
@@ -2994,6 +3455,7 @@ mod duckdb {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let c = self.conn.clone();
 
@@ -3005,12 +3467,12 @@ mod duckdb {
                         row.get(1)
                     })?;
 
-                let offset = (page - 1) * ROWS_PER_PAGE;
+                let offset = (page - 1) * page_size;
                 let sql = format!(
                     r#"
                 SELECT * FROM "{name}"
                 ORDER BY "{first_column}"
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset};
                     "#
                 );
@@ -3186,6 +3648,92 @@ mod duckdb {
                 })
             })
             .await?
+        }
+
+        async fn update_table_cell(
+            &self,
+            table_name: String,
+            row_id: i64,
+            column_name: String,
+            value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let c = self.conn.clone();
+            tokio::task::spawn_blocking(move || {
+                let c = c.lock().expect("could not get lock on connection");
+
+                // Get primary key column name
+                let pk_column: String = c.query_row(
+                    r#"
+                    SELECT unnest(constraint_column_names) as column_name
+                    FROM duckdb_constraints()
+                    WHERE constraint_type = 'PRIMARY KEY' AND table_name = ?
+                    LIMIT 1
+                    "#,
+                    [&table_name],
+                    |row| row.get(0),
+                )?;
+
+                // Convert JSON value to SQL format
+                let sql_value = match value {
+                    serde_json::Value::Null => "NULL".to_string(),
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                    _ => return Err(eyre::eyre!("不支持的数值类型")),
+                };
+
+                let sql = format!(
+                    "UPDATE {table_name} SET {column_name} = {sql_value} WHERE {pk_column} = {row_id}"
+                );
+                c.execute(&sql, [])?;
+
+                eyre::Ok(())
+            })
+            .await??;
+
+            Ok(())
+        }
+
+        async fn insert_table_row(
+            &self,
+            table_name: String,
+            data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<i64> {
+            let c = self.conn.clone();
+            let row_id = tokio::task::spawn_blocking(move || {
+                let c = c.lock().expect("could not get lock on connection");
+
+                let columns: Vec<String> = data.keys().cloned().collect();
+                let mut values = Vec::with_capacity(data.len());
+
+                // Convert each value to SQL format
+                for value in data.values() {
+                    let sql_value = match value {
+                        serde_json::Value::Null => "NULL".to_string(),
+                        serde_json::Value::Bool(b) => b.to_string(),
+                        serde_json::Value::Number(n) => n.to_string(),
+                        serde_json::Value::String(s) => format!("'{}'", s.replace('\'', "''")),
+                        _ => return Err(eyre::eyre!("不支持的数值类型")),
+                    };
+                    values.push(sql_value);
+                }
+
+                // Build INSERT statement
+                let columns_str = columns.join(", ");
+                let values_str = values.join(", ");
+                let sql = format!(
+                    "INSERT INTO {table_name} ({columns_str}) VALUES ({values_str})"
+                );
+                c.execute(&sql, [])?;
+
+                // Get last inserted ID
+                let row_id: i64 = c.query_row("SELECT last_insert_rowid()", [], |row| row.get(0))?;
+
+                eyre::Ok(row_id)
+            })
+            .await??;
+
+            Ok(row_id)
         }
     }
 }
@@ -3369,6 +3917,7 @@ mod parquet {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let c = self.conn.clone();
 
@@ -3380,12 +3929,12 @@ mod parquet {
                         row.get(1)
                     })?;
 
-                let offset = (page - 1) * ROWS_PER_PAGE;
+                let offset = (page - 1) * page_size;
                 let sql = format!(
                     r#"
                 SELECT * FROM "{name}"
                 ORDER BY "{first_column}"
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset};
                     "#
                 );
@@ -3513,6 +4062,24 @@ mod parquet {
                 })
             })
             .await?
+        }
+
+        async fn update_table_cell(
+            &self,
+            _table_name: String,
+            _row_id: i64,
+            _column_name: String,
+            _value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            Err(eyre::eyre!("Parquet files are read-only"))
+        }
+
+        async fn insert_table_row(
+            &self,
+            _table_name: String,
+            _data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<i64> {
+            Err(eyre::eyre!("Parquet files are read-only"))
         }
     }
 }
@@ -3696,6 +4263,7 @@ mod csv {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let c = self.conn.clone();
 
@@ -3707,12 +4275,12 @@ mod csv {
                         row.get(1)
                     })?;
 
-                let offset = (page - 1) * ROWS_PER_PAGE;
+                let offset = (page - 1) * page_size;
                 let sql = format!(
                     r#"
                 SELECT * FROM "{name}"
                 ORDER BY "{first_column}"
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset};
                     "#
                 );
@@ -3840,6 +4408,24 @@ mod csv {
                 })
             })
             .await?
+        }
+
+        async fn update_table_cell(
+            &self,
+            _table_name: String,
+            _row_id: i64,
+            _column_name: String,
+            _value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            Err(eyre::eyre!("CSV files are read-only"))
+        }
+
+        async fn insert_table_row(
+            &self,
+            _table_name: String,
+            _data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<i64> {
+            Err(eyre::eyre!("CSV files are read-only"))
         }
     }
 }
@@ -4155,6 +4741,7 @@ mod clickhouse {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let mut columns = self
                 .conn
@@ -4173,12 +4760,12 @@ mod clickhouse {
 
             let first_column = columns.first().ok_or_eyre("no first column found")?;
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let _sql = format!(
                 r#"
             SELECT {} FROM {name}
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#,
                 columns.join(",")
@@ -4287,6 +4874,24 @@ mod clickhouse {
                 tables,
                 relationships: Vec::new(),
             })
+        }
+
+        async fn update_table_cell(
+            &self,
+            _table_name: String,
+            _row_id: i64,
+            _column_name: String,
+            _value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            Err(color_eyre::eyre::eyre!("ClickHouse does not support updating individual cells"))
+        }
+
+        async fn insert_table_row(
+            &self,
+            _table_name: String,
+            _data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<i64> {
+            Err(color_eyre::eyre::eyre!("ClickHouse insert not implemented"))
         }
     }
 }
@@ -4715,6 +5320,7 @@ mod mssql {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let mut client = self.client.lock().await;
 
@@ -4734,12 +5340,12 @@ mod mssql {
                 .and_then(|row| row.get::<&str, &str>("name").map(ToOwned::to_owned))
                 .ok_or_eyre("couldn't count columns")?;
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM "{name}"
             ORDER BY {first_column}
-            OFFSET {offset} ROWS FETCH NEXT {ROWS_PER_PAGE} ROWS ONLY;
+            OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY;
                 "#
             );
 
@@ -4953,6 +5559,80 @@ mod mssql {
                 tables,
                 relationships: fk_rows,
             })
+        }
+
+        async fn update_table_cell(
+            &self,
+            table_name: String,
+            row_id: i64,
+            column_name: String,
+            value: serde_json::Value,
+        ) -> color_eyre::Result<()> {
+            let mut client = self.client.lock().await;
+
+            let sql = format!(
+                r#"
+                UPDATE "{table_name}"
+                SET "{column_name}" = @P1
+                WHERE "id" = @P2;
+                "#
+            );
+
+            let value = match value {
+                serde_json::Value::String(s) => s,
+                serde_json::Value::Number(n) => n.to_string(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                _ => return Err(color_eyre::eyre::eyre!("Unsupported value type")),
+            };
+
+            client.execute(sql, &[&value, &row_id]).await?;
+
+            Ok(())
+        }
+
+        async fn insert_table_row(
+            &self,
+            table_name: String,
+            data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<i64> {
+            let mut client = self.client.lock().await;
+
+            let columns: Vec<String> = data.keys().cloned().collect();
+            let placeholders: Vec<String> = (1..=columns.len()).map(|i| format!("@P{i}")).collect();
+
+            let sql = format!(
+                r#"
+                INSERT INTO "{table_name}" ({})
+                VALUES ({})
+                "#,
+                columns.join(", "),
+                placeholders.join(", ")
+            );
+
+            let mut params = Vec::new();
+            for value in data.values() {
+                let value = match value {
+                    serde_json::Value::String(s) => s.clone(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    _ => return Err(color_eyre::eyre::eyre!("Unsupported value type")),
+                };
+                params.push(value);
+            }
+
+            let param_refs: Vec<&dyn tiberius::ToSql> = params.iter().map(|s| s as &dyn tiberius::ToSql).collect();
+
+            client.execute(sql, &param_refs).await?;
+
+            let id: i64 = client
+                .query("SELECT SCOPE_IDENTITY() AS id", &[])
+                .await?
+                .into_row()
+                .await?
+                .and_then(|row| row.get("id"))
+                .ok_or_eyre("couldn't get inserted id")?;
+
+            Ok(id)
         }
     }
 }
@@ -5224,6 +5904,16 @@ mod handlers {
             .and(warp::get())
             .and(with_state(&db))
             .and_then(erd);
+        let update_cell = warp::put()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / String / "data"))
+            .and(warp::body::json::<UpdateCellRequest>())
+            .and_then(update_table_cell);
+        let insert_row = warp::post()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / String / "data"))
+            .and(warp::body::json::<InsertRowRequest>())
+            .and_then(insert_table_row);
 
         overview
             .or(tables)
@@ -5234,6 +5924,8 @@ mod handlers {
             .or(metadata)
             .or(shutdown)
             .or(erd)
+            .or(update_cell)
+            .or(insert_row)
     }
 
     #[derive(Deserialize)]
@@ -5244,6 +5936,19 @@ mod handlers {
     #[derive(Deserialize)]
     pub struct PageQuery {
         pub page: Option<i32>,
+        pub page_size: Option<i32>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct UpdateCellRequest {
+        pub row_id: i64,
+        pub column_name: String,
+        pub value: serde_json::Value,
+    }
+
+    #[derive(Deserialize)]
+    pub struct InsertRowRequest {
+        pub data: serde_json::Map<String, serde_json::Value>,
     }
 
     async fn overview(db: impl Database) -> Result<impl warp::Reply, warp::Rejection> {
@@ -5275,8 +5980,13 @@ mod handlers {
         name: String,
         data: PageQuery,
     ) -> Result<impl warp::Reply, warp::Rejection> {
+        const DEFAULT_PAGE_SIZE: i32 = 100;
         let data = db
-            .table_data(name, data.page.unwrap_or(1))
+            .table_data(
+                name,
+                data.page.unwrap_or(1),
+                data.page_size.unwrap_or(DEFAULT_PAGE_SIZE),
+            )
             .await
             .map_err(|e| {
                 tracing::error!("error while getting table: {e}");
@@ -5330,6 +6040,40 @@ mod handlers {
             warp::reject::custom(rejections::InternalServerError)
         })?;
         Ok(warp::reply::json(&erd))
+    }
+
+    async fn update_table_cell(
+        db: impl Database,
+        name: String,
+        request: UpdateCellRequest,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        db.update_table_cell(
+            name,
+            request.row_id,
+            request.column_name,
+            request.value,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("error while updating table cell: {e}");
+            warp::reject::custom(rejections::InternalServerError)
+        })?;
+        Ok(warp::reply::json(&serde_json::json!({"success": true})))
+    }
+
+    async fn insert_table_row(
+        db: impl Database,
+        name: String,
+        request: InsertRowRequest,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        let row_id = db
+            .insert_table_row(name, request.data)
+            .await
+            .map_err(|e| {
+                tracing::error!("error while inserting table row: {e}");
+                warp::reject::custom(rejections::InternalServerError)
+            })?;
+        Ok(warp::reply::json(&serde_json::json!({"success": true, "row_id": row_id})))
     }
 }
 
