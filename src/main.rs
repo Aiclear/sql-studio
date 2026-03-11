@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::OptionExt;
+use serde::Deserialize;
 use tokio::sync::mpsc;
 use warp::Filter;
 
@@ -335,7 +336,8 @@ trait Database: Sized + Clone + Send {
         &self,
         name: String,
         page: i32,
-    ) -> impl std::future::Future<Output = color_eyre::Result<responses::TableData>> + Send;
+        page_size: i32,
+    ) -> impl std::future::Future<Output = color_eyre::Result<responses::TableDataWithTotal>> + Send;
 
     fn tables_with_columns(
         &self,
@@ -347,6 +349,33 @@ trait Database: Sized + Clone + Send {
     ) -> impl std::future::Future<Output = color_eyre::Result<responses::Query>> + Send;
 
     fn erd(&self) -> impl std::future::Future<Output = color_eyre::Result<responses::Erd>> + Send;
+
+    fn table_schema(
+        &self,
+        name: String,
+    ) -> impl std::future::Future<Output = color_eyre::Result<responses::TableSchema>> + Send;
+
+    fn update_cell(
+        &self,
+        table: String,
+        column: String,
+        row_key: serde_json::Value,
+        value: serde_json::Value,
+        primary_keys: Vec<String>,
+    ) -> impl std::future::Future<Output = color_eyre::Result<responses::UpdateResult>> + Send;
+
+    fn insert_row(
+        &self,
+        table: String,
+        data: serde_json::Map<String, serde_json::Value>,
+    ) -> impl std::future::Future<Output = color_eyre::Result<responses::InsertResult>> + Send;
+
+    fn delete_row(
+        &self,
+        table: String,
+        primary_keys: Vec<String>,
+        row_key: serde_json::Value,
+    ) -> impl std::future::Future<Output = color_eyre::Result<responses::DeleteResult>> + Send;
 }
 
 #[derive(Clone)]
@@ -409,17 +438,18 @@ impl Database for AllDbs {
         &self,
         name: String,
         page: i32,
-    ) -> color_eyre::Result<responses::TableData> {
+        page_size: i32,
+    ) -> color_eyre::Result<responses::TableDataWithTotal> {
         match self {
-            AllDbs::Sqlite(x) => x.table_data(name, page).await,
-            AllDbs::Libsql(x) => x.table_data(name, page).await,
-            AllDbs::Postgres(x) => x.table_data(name, page).await,
-            AllDbs::Mysql(x) => x.table_data(name, page).await,
-            AllDbs::Duckdb(x) => x.table_data(name, page).await,
-            AllDbs::Parquet(x) => x.table_data(name, page).await,
-            AllDbs::Csv(x) => x.table_data(name, page).await,
-            AllDbs::Clickhouse(x) => x.table_data(name, page).await,
-            AllDbs::MsSql(x) => x.table_data(name, page).await,
+            AllDbs::Sqlite(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Libsql(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Postgres(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Mysql(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Duckdb(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Parquet(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Csv(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Clickhouse(x) => x.table_data(name, page, page_size).await,
+            AllDbs::MsSql(x) => x.table_data(name, page, page_size).await,
         }
     }
 
@@ -464,6 +494,78 @@ impl Database for AllDbs {
             AllDbs::MsSql(x) => x.erd().await,
         }
     }
+
+    async fn table_schema(&self, name: String) -> color_eyre::Result<responses::TableSchema> {
+        match self {
+            AllDbs::Sqlite(x) => x.table_schema(name).await,
+            AllDbs::Libsql(x) => x.table_schema(name).await,
+            AllDbs::Postgres(x) => x.table_schema(name).await,
+            AllDbs::Mysql(x) => x.table_schema(name).await,
+            AllDbs::Duckdb(x) => x.table_schema(name).await,
+            AllDbs::Parquet(x) => x.table_schema(name).await,
+            AllDbs::Csv(x) => x.table_schema(name).await,
+            AllDbs::Clickhouse(x) => x.table_schema(name).await,
+            AllDbs::MsSql(x) => x.table_schema(name).await,
+        }
+    }
+
+    async fn update_cell(
+        &self,
+        table: String,
+        column: String,
+        row_key: serde_json::Value,
+        value: serde_json::Value,
+        primary_keys: Vec<String>,
+    ) -> color_eyre::Result<responses::UpdateResult> {
+        match self {
+            AllDbs::Sqlite(x) => x.update_cell(table, column, row_key, value, primary_keys).await,
+            AllDbs::Libsql(x) => x.update_cell(table, column, row_key, value, primary_keys).await,
+            AllDbs::Postgres(x) => x.update_cell(table, column, row_key, value, primary_keys).await,
+            AllDbs::Mysql(x) => x.update_cell(table, column, row_key, value, primary_keys).await,
+            AllDbs::Duckdb(x) => x.update_cell(table, column, row_key, value, primary_keys).await,
+            AllDbs::Parquet(x) => x.update_cell(table, column, row_key, value, primary_keys).await,
+            AllDbs::Csv(x) => x.update_cell(table, column, row_key, value, primary_keys).await,
+            AllDbs::Clickhouse(x) => x.update_cell(table, column, row_key, value, primary_keys).await,
+            AllDbs::MsSql(x) => x.update_cell(table, column, row_key, value, primary_keys).await,
+        }
+    }
+
+    async fn insert_row(
+        &self,
+        table: String,
+        data: serde_json::Map<String, serde_json::Value>,
+    ) -> color_eyre::Result<responses::InsertResult> {
+        match self {
+            AllDbs::Sqlite(x) => x.insert_row(table, data).await,
+            AllDbs::Libsql(x) => x.insert_row(table, data).await,
+            AllDbs::Postgres(x) => x.insert_row(table, data).await,
+            AllDbs::Mysql(x) => x.insert_row(table, data).await,
+            AllDbs::Duckdb(x) => x.insert_row(table, data).await,
+            AllDbs::Parquet(x) => x.insert_row(table, data).await,
+            AllDbs::Csv(x) => x.insert_row(table, data).await,
+            AllDbs::Clickhouse(x) => x.insert_row(table, data).await,
+            AllDbs::MsSql(x) => x.insert_row(table, data).await,
+        }
+    }
+
+    async fn delete_row(
+        &self,
+        table: String,
+        primary_keys: Vec<String>,
+        row_key: serde_json::Value,
+    ) -> color_eyre::Result<responses::DeleteResult> {
+        match self {
+            AllDbs::Sqlite(x) => x.delete_row(table, primary_keys, row_key).await,
+            AllDbs::Libsql(x) => x.delete_row(table, primary_keys, row_key).await,
+            AllDbs::Postgres(x) => x.delete_row(table, primary_keys, row_key).await,
+            AllDbs::Mysql(x) => x.delete_row(table, primary_keys, row_key).await,
+            AllDbs::Duckdb(x) => x.delete_row(table, primary_keys, row_key).await,
+            AllDbs::Parquet(x) => x.delete_row(table, primary_keys, row_key).await,
+            AllDbs::Csv(x) => x.delete_row(table, primary_keys, row_key).await,
+            AllDbs::Clickhouse(x) => x.delete_row(table, primary_keys, row_key).await,
+            AllDbs::MsSql(x) => x.delete_row(table, primary_keys, row_key).await,
+        }
+    }
 }
 
 mod sqlite {
@@ -484,9 +586,9 @@ mod sqlite {
         pub async fn open(path: String, query_timeout: Duration) -> color_eyre::Result<Self> {
             let conn = if path == "preview" {
                 tokio::fs::write("sample.db", SAMPLE_DB).await?;
-                Connection::open_with_flags("sample.db", OpenFlags::SQLITE_OPEN_READ_ONLY).await?
+                Connection::open_with_flags("sample.db", OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE).await?
             } else {
-                Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE).await?
+                Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE).await?
             };
 
             // This is meant to test if the file at path is actually a DB.
@@ -765,7 +867,8 @@ mod sqlite {
             &self,
             name: String,
             page: i32,
-        ) -> color_eyre::Result<responses::TableData> {
+            page_size: i32,
+        ) -> color_eyre::Result<responses::TableDataWithTotal> {
             Ok(self
                 .conn
                 .call(move |conn| {
@@ -774,13 +877,17 @@ mod sqlite {
                             r.get::<_, String>(1)
                         })?;
 
-                    let offset = (page - 1) * ROWS_PER_PAGE;
+                    let total = conn.query_row(&format!("SELECT count(*) FROM '{name}'"), (), |r| {
+                        r.get::<_, i32>(0)
+                    })?;
+
+                    let offset = (page - 1) * page_size;
                     let mut stmt = conn.prepare(&format!(
                         r#"
                         SELECT *
                         FROM '{name}'
                         ORDER BY {first_column}
-                        LIMIT {ROWS_PER_PAGE}
+                        LIMIT {page_size}
                         OFFSET {offset}
                         "#
                     ))?;
@@ -803,7 +910,7 @@ mod sqlite {
                         .filter_map(|x| x.ok())
                         .collect::<Vec<_>>();
 
-                    Ok(responses::TableData { columns, rows })
+                    Ok(responses::TableDataWithTotal { columns, rows, total })
                 })
                 .await?)
         }
@@ -928,6 +1035,191 @@ mod sqlite {
                     Ok(responses::Erd {
                         tables,
                         relationships,
+                    })
+                })
+                .await?)
+        }
+
+        async fn table_schema(
+            &self,
+            name: String,
+        ) -> color_eyre::Result<responses::TableSchema> {
+            Ok(self
+                .conn
+                .call(move |conn| {
+                    let mut stmt = conn.prepare(&format!("PRAGMA table_info('{name}')"))?;
+                    let columns = stmt
+                        .query_map((), |r| {
+                            Ok(responses::ColumnInfo {
+                                cid: r.get::<_, i32>(0)?,
+                                name: r.get::<_, String>(1)?,
+                                data_type: r.get::<_, String>(2)?,
+                                notnull: r.get::<_, i32>(3)? != 0,
+                                default_value: Some(helpers::rusqlite_value_to_json(r.get_ref(4)?)),
+                                is_primary_key: r.get::<_, i32>(5)? != 0,
+                            })
+                        })?
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    let primary_keys = columns
+                        .iter()
+                        .filter(|c| c.is_primary_key)
+                        .map(|c| c.name.clone())
+                        .collect();
+
+                    Ok(responses::TableSchema {
+                        columns,
+                        primary_keys,
+                    })
+                })
+                .await?)
+        }
+
+        async fn update_cell(
+            &self,
+            table: String,
+            column: String,
+            row_key: serde_json::Value,
+            value: serde_json::Value,
+            primary_keys: Vec<String>,
+        ) -> color_eyre::Result<responses::UpdateResult> {
+            Ok(self
+                .conn
+                .call(move |conn| {
+                    let where_clause = if primary_keys.is_empty() {
+                        return Ok(responses::UpdateResult {
+                            success: false,
+                            rows_affected: 0,
+                            message: Some("No primary keys defined for table".to_string()),
+                        });
+                    } else if primary_keys.len() == 1 {
+                        format!("{} = ?", primary_keys[0])
+                    } else {
+                        primary_keys
+                            .iter()
+                            .map(|k| format!("{} = ?", k))
+                            .collect::<Vec<_>>()
+                            .join(" AND ")
+                    };
+
+                    let sql = format!(
+                        "UPDATE '{}' SET {} = ? WHERE {}",
+                        table, column, where_clause
+                    );
+
+                    let mut params = vec![helpers::json_to_rusqlite_value(&value)];
+
+                    if primary_keys.len() == 1 {
+                        if let Some(key_value) = row_key.as_array() {
+                            for v in key_value {
+                                params.push(helpers::json_to_rusqlite_value(v));
+                            }
+                        } else {
+                            params.push(helpers::json_to_rusqlite_value(&row_key));
+                        }
+                    } else if let Some(key_values) = row_key.as_array() {
+                        for v in key_values {
+                            params.push(helpers::json_to_rusqlite_value(v));
+                        }
+                    }
+
+                    let params_ref: Vec<_> = params.iter().map(|v| v as &dyn tokio_rusqlite::ToSql).collect();
+                    let rows_affected = conn.execute(&sql, params_ref.as_slice())?;
+
+                    Ok(responses::UpdateResult {
+                        success: true,
+                        rows_affected: rows_affected as u64,
+                        message: None,
+                    })
+                })
+                .await?)
+        }
+
+        async fn insert_row(
+            &self,
+            table: String,
+            data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<responses::InsertResult> {
+            Ok(self
+                .conn
+                .call(move |conn| {
+                    let columns: Vec<_> = data.keys().cloned().collect();
+                    let placeholders: Vec<_> = (0..columns.len()).map(|_| "?").collect();
+
+                    let sql = format!(
+                        "INSERT INTO '{}' ({}) VALUES ({})",
+                        table,
+                        columns.join(", "),
+                        placeholders.join(", ")
+                    );
+
+                    let params: Vec<_> = data
+                        .values()
+                        .map(|v| helpers::json_to_rusqlite_value(v))
+                        .collect();
+                    let params_ref: Vec<_> = params.iter().map(|v| v as &dyn tokio_rusqlite::ToSql).collect();
+
+                    conn.execute(&sql, params_ref.as_slice())?;
+                    let last_insert_id = conn.last_insert_rowid();
+
+                    Ok(responses::InsertResult {
+                        success: true,
+                        last_insert_id,
+                        message: None,
+                    })
+                })
+                .await?)
+        }
+
+        async fn delete_row(
+            &self,
+            table: String,
+            primary_keys: Vec<String>,
+            row_key: serde_json::Value,
+        ) -> color_eyre::Result<responses::DeleteResult> {
+            Ok(self
+                .conn
+                .call(move |conn| {
+                    let where_clause = if primary_keys.is_empty() {
+                        return Ok(responses::DeleteResult {
+                            success: false,
+                            rows_affected: 0,
+                            message: Some("No primary keys defined for table".to_string()),
+                        });
+                    } else if primary_keys.len() == 1 {
+                        format!("{} = ?", primary_keys[0])
+                    } else {
+                        primary_keys
+                            .iter()
+                            .map(|k| format!("{} = ?", k))
+                            .collect::<Vec<_>>()
+                            .join(" AND ")
+                    };
+
+                    let sql = format!("DELETE FROM '{}' WHERE {}", table, where_clause);
+
+                    let mut params = Vec::new();
+                    if primary_keys.len() == 1 {
+                        if let Some(key_value) = row_key.as_array() {
+                            for v in key_value {
+                                params.push(helpers::json_to_rusqlite_value(v));
+                            }
+                        } else {
+                            params.push(helpers::json_to_rusqlite_value(&row_key));
+                        }
+                    } else if let Some(key_values) = row_key.as_array() {
+                        for v in key_values {
+                            params.push(helpers::json_to_rusqlite_value(v));
+                        }
+                    }
+
+                    let params_ref: Vec<_> = params.iter().map(|v| v as &dyn tokio_rusqlite::ToSql).collect();
+                    let rows_affected = conn.execute(&sql, params_ref.as_slice())?;
+
+                    Ok(responses::DeleteResult {
+                        success: true,
+                        rows_affected: rows_affected as u64,
+                        message: None,
                     })
                 })
                 .await?)
@@ -1348,7 +1640,8 @@ mod libsql {
             &self,
             name: String,
             page: i32,
-        ) -> color_eyre::Result<responses::TableData> {
+            page_size: i32,
+        ) -> color_eyre::Result<responses::TableDataWithTotal> {
             let conn = self.db.connect()?;
 
             let first_column = conn
@@ -1371,8 +1664,16 @@ mod libsql {
                 .filter_map(|r| r.ok())
                 .collect::<Vec<_>>();
 
+            let total = conn
+                .query(&format!("SELECT count(*) FROM '{name}'"), ())
+                .await?
+                .next()
+                .await?
+                .ok_or_eyre("no row returned from db")?
+                .get::<i32>(0)?;
+
             let columns_len = columns.len();
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let rows = conn
                 .query(
                     &format!(
@@ -1380,7 +1681,7 @@ mod libsql {
                 SELECT *
                 FROM '{name}'
                 ORDER BY {first_column}
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset}
                         "#,
                     ),
@@ -1403,7 +1704,7 @@ mod libsql {
                 .filter_map(|r| r.ok())
                 .collect::<Vec<_>>();
 
-            Ok(responses::TableData { columns, rows })
+            Ok(responses::TableDataWithTotal { columns, rows, total })
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -1566,6 +1867,194 @@ mod libsql {
             Ok(responses::Erd {
                 tables,
                 relationships,
+            })
+        }
+
+        async fn table_schema(
+            &self,
+            name: String,
+        ) -> color_eyre::Result<responses::TableSchema> {
+            let conn = self.db.connect()?;
+
+            let columns = conn
+                .query(&format!("PRAGMA table_info('{name}')"), ())
+                .await?
+                .into_stream()
+                .map_ok(|r| {
+                    Ok(responses::ColumnInfo {
+                        cid: r.get::<i32>(0)?,
+                        name: r.get::<String>(1)?,
+                        data_type: r.get::<String>(2)?,
+                        notnull: r.get::<i32>(3)? == 1,
+                        default_value: r.get_value(4).ok().map(helpers::libsql_value_to_json),
+                        is_primary_key: r.get::<i32>(5)? == 1,
+                    })
+                })
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .filter_map(|r| r.ok())
+                .filter_map(|r: color_eyre::Result<_>| r.ok())
+                .collect::<Vec<_>>();
+
+            let primary_keys = columns
+                .iter()
+                .filter(|c| c.is_primary_key)
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>();
+
+            Ok(responses::TableSchema {
+                columns,
+                primary_keys,
+            })
+        }
+
+        async fn update_cell(
+            &self,
+            table: String,
+            column: String,
+            row_key: serde_json::Value,
+            value: serde_json::Value,
+            primary_keys: Vec<String>,
+        ) -> color_eyre::Result<responses::UpdateResult> {
+            let conn = self.db.connect()?;
+
+            if primary_keys.is_empty() {
+                return Ok(responses::UpdateResult {
+                    success: false,
+                    rows_affected: 0,
+                    message: Some("No primary keys defined for table".to_string()),
+                });
+            }
+
+            let where_clause = if primary_keys.len() == 1 {
+                format!("{} = ?", primary_keys[0])
+            } else {
+                primary_keys
+                    .iter()
+                    .map(|k| format!("{} = ?", k))
+                    .collect::<Vec<_>>()
+                    .join(" AND ")
+            };
+
+            let sql = format!(
+                "UPDATE '{}' SET {} = ? WHERE {}",
+                table, column, where_clause
+            );
+
+            let mut params = vec![helpers::json_to_libsql_value(&value)];
+
+            if primary_keys.len() == 1 {
+                if let Some(key_value) = row_key.as_array() {
+                    for v in key_value {
+                        params.push(helpers::json_to_libsql_value(v));
+                    }
+                } else {
+                    params.push(helpers::json_to_libsql_value(&row_key));
+                }
+            } else if let Some(key_values) = row_key.as_array() {
+                for v in key_values {
+                    params.push(helpers::json_to_libsql_value(v));
+                }
+            }
+
+            let result = conn.execute(&sql, params).await?;
+
+            Ok(responses::UpdateResult {
+                success: true,
+                rows_affected: result as u64,
+                message: None,
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            table: String,
+            data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<responses::InsertResult> {
+            let conn = self.db.connect()?;
+
+            let columns: Vec<_> = data.keys().cloned().collect();
+            let placeholders: Vec<_> = (1..=columns.len()).map(|i| format!("?{}", i)).collect();
+
+            let sql = format!(
+                "INSERT INTO '{}' ({}) VALUES ({})",
+                table,
+                columns.join(", "),
+                placeholders.join(", ")
+            );
+
+            let params: Vec<_> = data
+                .values()
+                .map(|v| helpers::json_to_libsql_value(v))
+                .collect();
+
+            conn.execute(&sql, params).await?;
+
+            let last_insert_id = conn
+                .query("SELECT last_insert_rowid()", ())
+                .await?
+                .next()
+                .await?
+                .ok_or_eyre("Failed to get last insert id")?
+                .get::<i64>(0)?;
+
+            Ok(responses::InsertResult {
+                success: true,
+                last_insert_id,
+                message: None,
+            })
+        }
+
+        async fn delete_row(
+            &self,
+            table: String,
+            primary_keys: Vec<String>,
+            row_key: serde_json::Value,
+        ) -> color_eyre::Result<responses::DeleteResult> {
+            let conn = self.db.connect()?;
+
+            if primary_keys.is_empty() {
+                return Ok(responses::DeleteResult {
+                    success: false,
+                    rows_affected: 0,
+                    message: Some("No primary keys defined for table".to_string()),
+                });
+            }
+
+            let where_clause = if primary_keys.len() == 1 {
+                format!("{} = ?", primary_keys[0])
+            } else {
+                primary_keys
+                    .iter()
+                    .map(|k| format!("{} = ?", k))
+                    .collect::<Vec<_>>()
+                    .join(" AND ")
+            };
+
+            let sql = format!("DELETE FROM '{}' WHERE {}", table, where_clause);
+
+            let mut params = Vec::new();
+            if primary_keys.len() == 1 {
+                if let Some(key_value) = row_key.as_array() {
+                    for v in key_value {
+                        params.push(helpers::json_to_libsql_value(v));
+                    }
+                } else {
+                    params.push(helpers::json_to_libsql_value(&row_key));
+                }
+            } else if let Some(key_values) = row_key.as_array() {
+                for v in key_values {
+                    params.push(helpers::json_to_libsql_value(v));
+                }
+            }
+
+            let result = conn.execute(&sql, params).await?;
+
+            Ok(responses::DeleteResult {
+                success: true,
+                rows_affected: result as u64,
+                message: None,
             })
         }
     }
@@ -1946,7 +2435,8 @@ mod postgres {
             &self,
             name: String,
             page: i32,
-        ) -> color_eyre::Result<responses::TableData> {
+            page_size: i32,
+        ) -> color_eyre::Result<responses::TableDataWithTotal> {
             let schema = &self.schema;
 
             let first_column: String = self
@@ -1966,12 +2456,25 @@ mod postgres {
                 .await?
                 .get(0);
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let total: i64 = self
+                .client
+                .query_one(
+                    &format!(
+                        r#"
+            SELECT count(*) FROM "{name}"
+                        "#
+                    ),
+                    &[],
+                )
+                .await?
+                .get(0);
+
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM "{name}"
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#
             );
@@ -2007,7 +2510,98 @@ mod postgres {
                 })
                 .collect::<Vec<_>>();
 
-            Ok(responses::TableData { columns, rows })
+            Ok(responses::TableDataWithTotal { columns, rows, total: total as i32 })
+        }
+
+        async fn table_schema(
+            &self,
+            name: String,
+        ) -> color_eyre::Result<responses::TableSchema> {
+            let schema = &self.schema;
+            let columns = self
+                .client
+                .query(
+                    &format!(
+                        r#"
+            SELECT 
+                c.ordinal_position as cid,
+                c.column_name as name,
+                c.data_type,
+                c.is_nullable = 'NO' as notnull,
+                c.column_default as default_value,
+                CASE WHEN pk.column_name IS NOT NULL THEN 1 ELSE 0 END as is_primary_key
+            FROM information_schema.columns c
+            LEFT JOIN (
+                SELECT kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu 
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                    AND tc.table_name = kcu.table_name
+                WHERE tc.constraint_type = 'PRIMARY KEY'
+                    AND tc.table_schema = '{schema}'
+                    AND tc.table_name = '{name}'
+            ) pk ON c.column_name = pk.column_name
+            WHERE c.table_schema = '{schema}' AND c.table_name = '{name}'
+            ORDER BY c.ordinal_position
+                        "#
+                    ),
+                    &[],
+                )
+                .await?
+                .into_iter()
+                .map(|r| {
+                    Ok(responses::ColumnInfo {
+                        cid: r.get(0),
+                        name: r.get(1),
+                        data_type: r.get(2),
+                        notnull: r.get(3),
+                        default_value: r.get::<_, Option<String>>(4).map(serde_json::Value::String),
+                        is_primary_key: r.get::<_, i32>(5) == 1,
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(responses::TableSchema { columns })
+        }
+
+        async fn update_cell(
+            &self,
+            _table: String,
+            _column: String,
+            _row_key: serde_json::Value,
+            _value: serde_json::Value,
+            _primary_keys: Vec<String>,
+        ) -> color_eyre::Result<responses::UpdateResult> {
+            Ok(responses::UpdateResult {
+                success: false,
+                rows_affected: 0,
+                message: Some("Postgres update not implemented yet".to_string()),
+            })
+        }
+
+        async fn insert_row(
+            &self,
+            _table: String,
+            _data: serde_json::Map<String, serde_json::Value>,
+        ) -> color_eyre::Result<responses::InsertResult> {
+            Ok(responses::InsertResult {
+                success: false,
+                message: Some("Postgres insert not implemented yet".to_string()),
+            })
+        }
+
+        async fn delete_row(
+            &self,
+            _table: String,
+            _primary_keys: Vec<String>,
+            _row_key: serde_json::Value,
+        ) -> color_eyre::Result<responses::DeleteResult> {
+            Ok(responses::DeleteResult {
+                success: false,
+                rows_affected: 0,
+                message: Some("Postgres delete not implemented yet".to_string()),
+            })
         }
 
         async fn tables_with_columns(&self) -> color_eyre::Result<responses::TablesWithColumns> {
@@ -4986,6 +5580,26 @@ mod helpers {
         }
     }
 
+    pub fn json_to_rusqlite_value(v: &serde_json::Value) -> tokio_rusqlite::types::Value {
+        use tokio_rusqlite::types::Value;
+        match v {
+            serde_json::Value::Null => Value::Null,
+            serde_json::Value::Bool(b) => Value::Integer(*b as i64),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Value::Integer(i)
+                } else if let Some(f) = n.as_f64() {
+                    Value::Real(f)
+                } else {
+                    Value::Text(n.to_string())
+                }
+            }
+            serde_json::Value::String(s) => Value::Text(s.clone()),
+            serde_json::Value::Array(a) => Value::Blob(serde_json::to_vec(a).unwrap_or_default()),
+            serde_json::Value::Object(o) => Value::Text(serde_json::to_string(o).unwrap_or_default()),
+        }
+    }
+
     pub fn libsql_value_to_json(v: LibsqlValue) -> serde_json::Value {
         use LibsqlValue::*;
         match v {
@@ -4994,6 +5608,26 @@ mod helpers {
             Real(x) => serde_json::json!(x),
             Text(s) => serde_json::Value::String(s),
             Blob(s) => serde_json::json!(s),
+        }
+    }
+
+    pub fn json_to_libsql_value(v: &serde_json::Value) -> LibsqlValue {
+        use LibsqlValue::*;
+        match v {
+            serde_json::Value::Null => Null,
+            serde_json::Value::Bool(b) => Integer(if *b { 1 } else { 0 }),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Integer(i)
+                } else if let Some(f) = n.as_f64() {
+                    Real(f)
+                } else {
+                    Text(n.to_string())
+                }
+            }
+            serde_json::Value::String(s) => Text(s.clone()),
+            serde_json::Value::Array(a) => Blob(serde_json::to_vec(a).unwrap_or_default()),
+            serde_json::Value::Object(o) => Text(serde_json::to_string(o).unwrap_or_default()),
         }
     }
 
@@ -5164,6 +5798,72 @@ mod responses {
         pub to_table: String,
         pub to_column: String,
     }
+
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct ColumnInfo {
+        pub cid: i32,
+        pub name: String,
+        pub data_type: String,
+        pub notnull: bool,
+        pub default_value: Option<serde_json::Value>,
+        pub is_primary_key: bool,
+    }
+
+    #[derive(Serialize)]
+    pub struct TableSchema {
+        pub columns: Vec<ColumnInfo>,
+        pub primary_keys: Vec<String>,
+    }
+
+    #[derive(Serialize)]
+    pub struct TableDataWithTotal {
+        pub columns: Vec<String>,
+        pub rows: Vec<Vec<serde_json::Value>>,
+        pub total: i32,
+    }
+
+    #[derive(Serialize)]
+    pub struct UpdateResult {
+        pub success: bool,
+        pub rows_affected: u64,
+        pub message: Option<String>,
+    }
+
+    #[derive(Serialize)]
+    pub struct InsertResult {
+        pub success: bool,
+        pub last_insert_id: i64,
+        pub message: Option<String>,
+    }
+
+    #[derive(Serialize)]
+    pub struct DeleteResult {
+        pub success: bool,
+        pub rows_affected: u64,
+        pub message: Option<String>,
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UpdateCellRequest {
+    pub table: String,
+    pub column: String,
+    pub row_key: serde_json::Value,
+    pub value: serde_json::Value,
+    pub primary_keys: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct InsertRowRequest {
+    pub table: String,
+    pub data: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DeleteRowRequest {
+    pub table: String,
+    pub primary_keys: Vec<String>,
+    pub row_key: serde_json::Value,
 }
 
 mod handlers {
@@ -5171,7 +5871,7 @@ mod handlers {
     use tokio::sync::mpsc;
     use warp::Filter;
 
-    use crate::{Database, rejections, responses::Metadata};
+    use crate::{Database, DeleteRowRequest, InsertRowRequest, UpdateCellRequest, rejections, responses::Metadata};
 
     fn with_state<T: Clone + Send>(
         state: &T,
@@ -5202,6 +5902,25 @@ mod handlers {
             .and(warp::path!("tables" / String / "data"))
             .and(warp::query::<PageQuery>())
             .and_then(table_data);
+        let table_schema_route = warp::get()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / String / "schema"))
+            .and_then(table_schema);
+        let update_cell_route = warp::post()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / "update-cell"))
+            .and(warp::body::json::<UpdateCellRequest>())
+            .and_then(update_cell);
+        let insert_row_route = warp::post()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / "insert-row"))
+            .and(warp::body::json::<InsertRowRequest>())
+            .and_then(insert_row);
+        let delete_row_route = warp::post()
+            .and(with_state(&db))
+            .and(warp::path!("tables" / "delete-row"))
+            .and(warp::body::json::<DeleteRowRequest>())
+            .and_then(delete_row);
         let autocomplete = warp::path!("autocomplete")
             .and(warp::get())
             .and(with_state(&db))
@@ -5228,9 +5947,13 @@ mod handlers {
         overview
             .or(tables)
             .or(table)
+            .or(table_schema_route)
             .or(autocomplete)
             .or(query)
             .or(data)
+            .or(update_cell_route)
+            .or(insert_row_route)
+            .or(delete_row_route)
             .or(metadata)
             .or(shutdown)
             .or(erd)
@@ -5244,6 +5967,7 @@ mod handlers {
     #[derive(Deserialize)]
     pub struct PageQuery {
         pub page: Option<i32>,
+        pub page_size: Option<i32>,
     }
 
     async fn overview(db: impl Database) -> Result<impl warp::Reply, warp::Rejection> {
@@ -5275,14 +5999,66 @@ mod handlers {
         name: String,
         data: PageQuery,
     ) -> Result<impl warp::Reply, warp::Rejection> {
+        let page = data.page.unwrap_or(1);
+        let page_size = data.page_size.unwrap_or(50);
         let data = db
-            .table_data(name, data.page.unwrap_or(1))
+            .table_data(name, page, page_size)
             .await
             .map_err(|e| {
-                tracing::error!("error while getting table: {e}");
+                tracing::error!("error while getting table data: {e}");
                 warp::reject::custom(rejections::InternalServerError)
             })?;
         Ok(warp::reply::json(&data))
+    }
+
+    async fn table_schema(
+        db: impl Database,
+        name: String,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        let schema = db.table_schema(name).await.map_err(|e| {
+            tracing::error!("error while getting table schema: {e}");
+            warp::reject::custom(rejections::InternalServerError)
+        })?;
+        Ok(warp::reply::json(&schema))
+    }
+
+    async fn update_cell(
+        db: impl Database,
+        req: UpdateCellRequest,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        let result = db
+            .update_cell(req.table, req.column, req.row_key, req.value, req.primary_keys)
+            .await
+            .map_err(|e| {
+                tracing::error!("error while updating cell: {e}");
+                warp::reject::custom(rejections::InternalServerError)
+            })?;
+        Ok(warp::reply::json(&result))
+    }
+
+    async fn insert_row(
+        db: impl Database,
+        req: InsertRowRequest,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        let result = db.insert_row(req.table, req.data).await.map_err(|e| {
+            tracing::error!("error while inserting row: {e}");
+            warp::reject::custom(rejections::InternalServerError)
+        })?;
+        Ok(warp::reply::json(&result))
+    }
+
+    async fn delete_row(
+        db: impl Database,
+        req: DeleteRowRequest,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        let result = db
+            .delete_row(req.table, req.primary_keys, req.row_key)
+            .await
+            .map_err(|e| {
+                tracing::error!("error while deleting row: {e}");
+                warp::reject::custom(rejections::InternalServerError)
+            })?;
+        Ok(warp::reply::json(&result))
     }
 
     async fn autocomplete(db: impl Database) -> Result<impl warp::Reply, warp::Rejection> {
