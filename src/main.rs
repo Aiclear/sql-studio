@@ -335,6 +335,7 @@ trait Database: Sized + Clone + Send {
         &self,
         name: String,
         page: i32,
+        page_size: i32,
     ) -> impl std::future::Future<Output = color_eyre::Result<responses::TableData>> + Send;
 
     fn table_columns_info(
@@ -433,17 +434,18 @@ impl Database for AllDbs {
         &self,
         name: String,
         page: i32,
+        page_size: i32,
     ) -> color_eyre::Result<responses::TableData> {
         match self {
-            AllDbs::Sqlite(x) => x.table_data(name, page).await,
-            AllDbs::Libsql(x) => x.table_data(name, page).await,
-            AllDbs::Postgres(x) => x.table_data(name, page).await,
-            AllDbs::Mysql(x) => x.table_data(name, page).await,
-            AllDbs::Duckdb(x) => x.table_data(name, page).await,
-            AllDbs::Parquet(x) => x.table_data(name, page).await,
-            AllDbs::Csv(x) => x.table_data(name, page).await,
-            AllDbs::Clickhouse(x) => x.table_data(name, page).await,
-            AllDbs::MsSql(x) => x.table_data(name, page).await,
+            AllDbs::Sqlite(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Libsql(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Postgres(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Mysql(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Duckdb(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Parquet(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Csv(x) => x.table_data(name, page, page_size).await,
+            AllDbs::Clickhouse(x) => x.table_data(name, page, page_size).await,
+            AllDbs::MsSql(x) => x.table_data(name, page, page_size).await,
         }
     }
 
@@ -564,10 +566,44 @@ impl Database for AllDbs {
 
 mod sqlite {
     use color_eyre::eyre::OptionExt;
+    use rusqlite::ToSql;
     use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
     use tokio_rusqlite::{Connection, OpenFlags};
 
     use crate::{Database, ROWS_PER_PAGE, SAMPLE_DB, helpers, responses};
+
+    fn bind_json_value(
+        stmt: &mut rusqlite::Statement,
+        index: usize,
+        value: &serde_json::Value,
+    ) -> rusqlite::Result<()> {
+        match value {
+            serde_json::Value::Null => {
+                stmt.raw_bind_parameter(index, None::<i32>)?;
+            }
+            serde_json::Value::Bool(b) => {
+                stmt.raw_bind_parameter(index, if *b { 1 } else { 0 })?;
+            }
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    stmt.raw_bind_parameter(index, i)?;
+                } else if let Some(f) = n.as_f64() {
+                    stmt.raw_bind_parameter(index, f)?;
+                } else {
+                    stmt.raw_bind_parameter(index, n.to_string())?;
+                }
+            }
+            serde_json::Value::String(s) => {
+                stmt.raw_bind_parameter(index, s.as_str())?;
+            }
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                let json_str = serde_json::to_string(value)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                stmt.raw_bind_parameter(index, json_str)?;
+            }
+        }
+        Ok(())
+    }
 
     #[derive(Clone)]
     pub struct Db {
@@ -861,6 +897,7 @@ mod sqlite {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             Ok(self
                 .conn
@@ -870,13 +907,13 @@ mod sqlite {
                             r.get::<_, String>(1)
                         })?;
 
-                    let offset = (page - 1) * ROWS_PER_PAGE;
+                    let offset = (page - 1) * page_size;
                     let mut stmt = conn.prepare(&format!(
                         r#"
                         SELECT *
                         FROM '{name}'
                         ORDER BY {first_column}
-                        LIMIT {ROWS_PER_PAGE}
+                        LIMIT {page_size}
                         OFFSET {offset}
                         "#
                     ))?;
@@ -1006,39 +1043,193 @@ mod sqlite {
 
         async fn update_row(
             &self,
-            _table_name: String,
-            _primary_key_values: std::collections::HashMap<String, serde_json::Value>,
-            _updates: std::collections::HashMap<String, serde_json::Value>,
+            table_name: String,
+            primary_key_values: std::collections::HashMap<String, serde_json::Value>,
+            updates: std::collections::HashMap<String, serde_json::Value>,
         ) -> color_eyre::Result<responses::OperationResult> {
-            Ok(responses::OperationResult {
-                success: false,
-                rows_affected: 0,
-                message: Some("Update operation not yet implemented for SQLite".to_string()),
-            })
+            if updates.is_empty() {
+                return Ok(responses::OperationResult {
+                    success: false,
+                    rows_affected: 0,
+                    message: Some("No updates provided".to_string()),
+                });
+            }
+
+            if primary_key_values.is_empty() {
+                return Ok(responses::OperationResult {
+                    success: false,
+                    rows_affected: 0,
+                    message: Some("No primary key values provided".to_string()),
+                });
+            }
+
+            let table_name_clone = table_name.clone();
+            let updates_clone = updates.clone();
+            let primary_key_values_clone = primary_key_values.clone();
+
+            let result = self
+                .conn
+                .call(move |conn| {
+                    let set_clause = updates_clone
+                        .keys()
+                        .map(|k| format!("\"{}\" = ?", k))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    let where_clause = primary_key_values_clone
+                        .keys()
+                        .map(|k| format!("\"{}\" = ?", k))
+                        .collect::<Vec<_>>()
+                        .join(" AND ");
+
+                    let sql = format!(
+                        "UPDATE \"{}\" SET {} WHERE {}",
+                        table_name_clone, set_clause, where_clause
+                    );
+
+                    let mut stmt = conn.prepare(&sql)?;
+
+                    let mut param_index = 1;
+                    for key in updates_clone.keys() {
+                        let value = updates_clone.get(key).unwrap();
+                        bind_json_value(&mut stmt, param_index, value)?;
+                        param_index += 1;
+                    }
+
+                    for key in primary_key_values_clone.keys() {
+                        let value = primary_key_values_clone.get(key).unwrap();
+                        bind_json_value(&mut stmt, param_index, value)?;
+                        param_index += 1;
+                    }
+
+                    let rows_affected = stmt.execute([])?;
+
+                    Ok(responses::OperationResult {
+                        success: true,
+                        rows_affected: rows_affected as u64,
+                        message: None,
+                    })
+                })
+                .await;
+
+            match result {
+                Ok(r) => Ok(r),
+                Err(e) => Ok(responses::OperationResult {
+                    success: false,
+                    rows_affected: 0,
+                    message: Some(e.to_string()),
+                }),
+            }
         }
 
         async fn insert_row(
             &self,
-            _table_name: String,
-            _values: std::collections::HashMap<String, serde_json::Value>,
+            table_name: String,
+            values: std::collections::HashMap<String, serde_json::Value>,
         ) -> color_eyre::Result<responses::OperationResult> {
-            Ok(responses::OperationResult {
-                success: false,
-                rows_affected: 0,
-                message: Some("Insert operation not yet implemented for SQLite".to_string()),
-            })
+            if values.is_empty() {
+                return Ok(responses::OperationResult {
+                    success: false,
+                    rows_affected: 0,
+                    message: Some("No values provided".to_string()),
+                });
+            }
+
+            let table_name_clone = table_name.clone();
+            let values_clone = values.clone();
+
+            let result = self
+                .conn
+                .call(move |conn| {
+                    let columns: Vec<String> = values_clone.keys().cloned().collect();
+                    let placeholders: Vec<String> = (1..=values_clone.len()).map(|_| "?".to_string()).collect();
+
+                    let sql = format!(
+                        "INSERT INTO \"{}\" ({}) VALUES ({})",
+                        table_name_clone,
+                        columns.iter().map(|c| format!("\"{}\"", c)).collect::<Vec<_>>().join(", "),
+                        placeholders.join(", ")
+                    );
+
+                    let mut stmt = conn.prepare(&sql)?;
+
+                    for (i, key) in columns.iter().enumerate() {
+                        let value = values_clone.get(key).unwrap();
+                        bind_json_value(&mut stmt, i + 1, value)?;
+                    }
+
+                    let rows_affected = stmt.execute([])?;
+
+                    Ok(responses::OperationResult {
+                        success: true,
+                        rows_affected: rows_affected as u64,
+                        message: None,
+                    })
+                })
+                .await;
+
+            match result {
+                Ok(r) => Ok(r),
+                Err(e) => Ok(responses::OperationResult {
+                    success: false,
+                    rows_affected: 0,
+                    message: Some(e.to_string()),
+                }),
+            }
         }
 
         async fn delete_row(
             &self,
-            _table_name: String,
-            _primary_key_values: std::collections::HashMap<String, serde_json::Value>,
+            table_name: String,
+            primary_key_values: std::collections::HashMap<String, serde_json::Value>,
         ) -> color_eyre::Result<responses::OperationResult> {
-            Ok(responses::OperationResult {
-                success: false,
-                rows_affected: 0,
-                message: Some("Delete operation not yet implemented for SQLite".to_string()),
-            })
+            if primary_key_values.is_empty() {
+                return Ok(responses::OperationResult {
+                    success: false,
+                    rows_affected: 0,
+                    message: Some("No primary key values provided".to_string()),
+                });
+            }
+
+            let table_name_clone = table_name.clone();
+            let primary_key_values_clone = primary_key_values.clone();
+
+            let result = self
+                .conn
+                .call(move |conn| {
+                    let where_clause = primary_key_values_clone
+                        .keys()
+                        .map(|k| format!("\"{}\" = ?", k))
+                        .collect::<Vec<_>>()
+                        .join(" AND ");
+
+                    let sql = format!("DELETE FROM \"{}\" WHERE {}", table_name_clone, where_clause);
+
+                    let mut stmt = conn.prepare(&sql)?;
+
+                    for (i, key) in primary_key_values_clone.keys().enumerate() {
+                        let value = primary_key_values_clone.get(key).unwrap();
+                        bind_json_value(&mut stmt, i + 1, value)?;
+                    }
+
+                    let rows_affected = stmt.execute([])?;
+
+                    Ok(responses::OperationResult {
+                        success: true,
+                        rows_affected: rows_affected as u64,
+                        message: None,
+                    })
+                })
+                .await;
+
+            match result {
+                Ok(r) => Ok(r),
+                Err(e) => Ok(responses::OperationResult {
+                    success: false,
+                    rows_affected: 0,
+                    message: Some(e.to_string()),
+                }),
+            }
         }
 
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
@@ -1517,6 +1708,7 @@ mod libsql {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let conn = self.db.connect()?;
 
@@ -1541,7 +1733,7 @@ mod libsql {
                 .collect::<Vec<_>>();
 
             let columns_len = columns.len();
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let rows = conn
                 .query(
                     &format!(
@@ -1549,7 +1741,7 @@ mod libsql {
                 SELECT *
                 FROM '{name}'
                 ORDER BY {first_column}
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset}
                         "#,
                     ),
@@ -6221,6 +6413,7 @@ mod handlers {
     #[derive(Deserialize)]
     pub struct PageQuery {
         pub page: Option<i32>,
+        pub page_size: Option<i32>,
     }
 
     #[derive(Deserialize)]
@@ -6268,8 +6461,10 @@ mod handlers {
         name: String,
         data: PageQuery,
     ) -> Result<impl warp::Reply, warp::Rejection> {
+        let page = data.page.unwrap_or(1);
+        let page_size = data.page_size.unwrap_or(50);
         let data = db
-            .table_data(name, data.page.unwrap_or(1))
+            .table_data(name, page, page_size)
             .await
             .map_err(|e| {
                 tracing::error!("error while getting table: {e}");

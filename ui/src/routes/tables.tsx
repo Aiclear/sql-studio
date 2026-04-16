@@ -17,7 +17,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { z } from "zod";
-import { DataGrid, type Column } from "react-data-grid";
+import { DataGrid, type Column, SelectColumn } from "react-data-grid";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CodeBlock, irBlack as CodeDarkTheme } from "react-code-blocks";
@@ -59,8 +59,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-const ROWS_PER_PAGE = 50;
 
 export const Route = createFileRoute("/tables")({
   component: Tables,
@@ -243,6 +241,7 @@ function TableData({ name }: TableDataProps) {
   const currentTheme = useTheme();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [selectedRows, setSelectedRows] = useState<ReadonlySet<number>>(
     new Set(),
   );
@@ -259,8 +258,8 @@ function TableData({ name }: TableDataProps) {
   });
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["tables", "data", name, page],
-    queryFn: () => fetchTableData(name, page),
+    queryKey: ["tables", "data", name, page, pageSize],
+    queryFn: () => fetchTableData(name, page, pageSize),
   });
 
   const updateMutation = useMutation({
@@ -407,12 +406,20 @@ function TableData({ name }: TableDataProps) {
 
   const columns: Column<RowData>[] = useMemo(() => {
     if (!data) return [];
-    return data.columns.map((col) => ({
+    const dataColumns = data.columns.map((col) => ({
       key: col,
       name: col,
       resizable: true,
       editable: true,
-      renderCell: ({ row, column, rowIdx }) => {
+      renderCell: ({
+        row,
+        column,
+        rowIdx,
+      }: {
+        row: RowData;
+        column: Column<RowData>;
+        rowIdx: number;
+      }) => {
         const isEditing =
           editingCell?.rowIdx === rowIdx &&
           editingCell?.columnKey === column.key;
@@ -476,6 +483,7 @@ function TableData({ name }: TableDataProps) {
         );
       },
     }));
+    return [SelectColumn, ...dataColumns];
   }, [data, editingCell, editValue, handleDoubleClick, handleSaveEdit, handleCancelEdit]);
 
   const goToPage = useCallback(
@@ -543,20 +551,21 @@ function TableData({ name }: TableDataProps) {
 
         <div className="flex items-center gap-2">
           <Select
-            value={String(page)}
-            onValueChange={(val) => goToPage(Number(val))}
+            value={String(pageSize)}
+            onValueChange={(val) => {
+              setPageSize(Number(val));
+              setPage(1);
+            }}
           >
             <SelectTrigger className="w-32 h-8 text-sm">
-              <SelectValue placeholder="Page" />
+              <SelectValue placeholder="Page Size" />
             </SelectTrigger>
             <SelectContent>
-              {Array.from({ length: Math.min(100, 20) }, (_, i) => i + 1).map(
-                (p) => (
-                  <SelectItem key={p} value={String(p)}>
-                    Page {p}
-                  </SelectItem>
-                ),
-              )}
+              {[50, 100, 200, 500].map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size} rows
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -587,7 +596,7 @@ function TableData({ name }: TableDataProps) {
               variant="outline"
               className="h-8 w-8 p-0"
               onClick={() => goToPage(page + 1)}
-              disabled={data.rows.length < ROWS_PER_PAGE}
+              disabled={data.rows.length < pageSize}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
