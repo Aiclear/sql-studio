@@ -2383,6 +2383,7 @@ mod postgres {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let schema = &self.schema;
 
@@ -2403,12 +2404,12 @@ mod postgres {
                 .await?
                 .get(0);
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM "{name}"
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#
             );
@@ -3014,6 +3015,7 @@ mod mysql {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let mut conn = self.pool.get_conn().await?;
 
@@ -3029,12 +3031,12 @@ mod mysql {
             .map(|count: String| count)
             .ok_or_eyre("couldn't get first column")?;
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM {name}
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#
             );
@@ -3624,6 +3626,7 @@ mod duckdb {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let c = self.conn.clone();
 
@@ -3635,12 +3638,12 @@ mod duckdb {
                         row.get(1)
                     })?;
 
-                let offset = (page - 1) * ROWS_PER_PAGE;
+                let offset = (page - 1) * page_size;
                 let sql = format!(
                     r#"
                 SELECT * FROM "{name}"
                 ORDER BY "{first_column}"
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset};
                     "#
                 );
@@ -4106,6 +4109,7 @@ mod parquet {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let c = self.conn.clone();
 
@@ -4117,12 +4121,12 @@ mod parquet {
                         row.get(1)
                     })?;
 
-                let offset = (page - 1) * ROWS_PER_PAGE;
+                let offset = (page - 1) * page_size;
                 let sql = format!(
                     r#"
                 SELECT * FROM "{name}"
                 ORDER BY "{first_column}"
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset};
                     "#
                 );
@@ -4517,6 +4521,7 @@ mod csv {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let c = self.conn.clone();
 
@@ -4528,12 +4533,12 @@ mod csv {
                         row.get(1)
                     })?;
 
-                let offset = (page - 1) * ROWS_PER_PAGE;
+                let offset = (page - 1) * page_size;
                 let sql = format!(
                     r#"
                 SELECT * FROM "{name}"
                 ORDER BY "{first_column}"
-                LIMIT {ROWS_PER_PAGE}
+                LIMIT {page_size}
                 OFFSET {offset};
                     "#
                 );
@@ -5060,6 +5065,7 @@ mod clickhouse {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let mut columns = self
                 .conn
@@ -5078,12 +5084,12 @@ mod clickhouse {
 
             let first_column = columns.first().ok_or_eyre("no first column found")?;
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let _sql = format!(
                 r#"
             SELECT {} FROM {name}
             ORDER BY {first_column}
-            LIMIT {ROWS_PER_PAGE}
+            LIMIT {page_size}
             OFFSET {offset}
                 "#,
                 columns.join(",")
@@ -5713,6 +5719,7 @@ mod mssql {
             &self,
             name: String,
             page: i32,
+            page_size: i32,
         ) -> color_eyre::Result<responses::TableData> {
             let mut client = self.client.lock().await;
 
@@ -5732,12 +5739,12 @@ mod mssql {
                 .and_then(|row| row.get::<&str, &str>("name").map(ToOwned::to_owned))
                 .ok_or_eyre("couldn't count columns")?;
 
-            let offset = (page - 1) * ROWS_PER_PAGE;
+            let offset = (page - 1) * page_size;
             let sql = format!(
                 r#"
             SELECT * FROM "{name}"
             ORDER BY {first_column}
-            OFFSET {offset} ROWS FETCH NEXT {ROWS_PER_PAGE} ROWS ONLY;
+            OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY;
                 "#
             );
 
