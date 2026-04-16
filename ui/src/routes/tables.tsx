@@ -9,11 +9,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight,
   Plus,
   Copy,
   Trash2,
-  Edit3,
   Check,
   X,
   RefreshCw,
@@ -53,12 +51,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -260,7 +252,6 @@ function TableData({ name }: TableDataProps) {
   } | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [showCopyDialog, setShowCopyDialog] = useState(false);
-  const [rowsData, setRowsData] = useState<RowData[]>([]);
 
   const { data: tableInfo } = useQuery({
     queryKey: ["tables", "columns", name],
@@ -311,12 +302,6 @@ function TableData({ name }: TableDataProps) {
       return rowData;
     });
   }, [data]);
-
-  const totalPages = useMemo(() => {
-    if (!tableInfo) return 1;
-    const rowCount = tableInfo.columns.length > 0 ? 1000 : 1;
-    return Math.ceil(rowCount / ROWS_PER_PAGE);
-  }, [tableInfo]);
 
   const primaryKeys = useMemo(() => {
     return tableInfo?.primary_keys || [];
@@ -508,74 +493,52 @@ function TableData({ name }: TableDataProps) {
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => refetch()}
-                  disabled={isLoading}
-                >
-                  <RefreshCw
-                    className={cn("h-4 w-4", isLoading && "animate-spin")}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Refresh</TooltipContent>
-            </Tooltip>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => refetch()}
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={cn("h-4 w-4", isLoading && "animate-spin")}
+            />
+          </Button>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    const emptyRow: Record<string, unknown> = {};
-                    for (const col of data.columns) {
-                      emptyRow[col] = null;
-                    }
-                    insertMutation.mutate(emptyRow);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Row
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Add new empty row</TooltipContent>
-            </Tooltip>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const emptyRow: Record<string, unknown> = {};
+              for (const col of data.columns) {
+                emptyRow[col] = null;
+              }
+              insertMutation.mutate(emptyRow);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add Row
+          </Button>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCopySelected}
-                  disabled={selectedRows.size === 0}
-                >
-                  <Copy className="h-4 w-4 mr-1" />
-                  Copy ({selectedRows.size})
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Copy selected rows as new rows</TooltipContent>
-            </Tooltip>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleCopySelected}
+            disabled={selectedRows.size === 0}
+          >
+            <Copy className="h-4 w-4 mr-1" />
+            Copy ({selectedRows.size})
+          </Button>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-destructive"
-                  onClick={handleDeleteSelected}
-                  disabled={selectedRows.size === 0}
-                >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Delete ({selectedRows.size})
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete selected rows</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive"
+            onClick={handleDeleteSelected}
+            disabled={selectedRows.size === 0}
+          >
+            <Trash2 className="h-4 w-4 mr-1" />
+            Delete ({selectedRows.size})
+          </Button>
         </div>
 
         <div className="flex items-center gap-2">
