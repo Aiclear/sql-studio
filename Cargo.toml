@@ -15,6 +15,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.141"
 tokio = { version = "1.47.0", features = ["full"] }
 tokio-rusqlite = { version = "0.6.0", features = ["bundled"] }
+rusqlite = { version = "0.32.1", features = ["bundled"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 warp = "0.3.7"
