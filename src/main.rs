@@ -566,11 +566,32 @@ impl Database for AllDbs {
 
 mod sqlite {
     use color_eyre::eyre::OptionExt;
+    use rusqlite::types::Value as RusqliteValue;
     use rusqlite::ToSql;
     use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
     use tokio_rusqlite::{Connection, OpenFlags};
 
     use crate::{Database, ROWS_PER_PAGE, SAMPLE_DB, helpers, responses};
+
+    fn json_value_to_rusqlite_value(value: &serde_json::Value) -> RusqliteValue {
+        match value {
+            serde_json::Value::Null => RusqliteValue::Null,
+            serde_json::Value::Bool(b) => RusqliteValue::Integer(if *b { 1 } else { 0 }),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    RusqliteValue::Integer(i)
+                } else if let Some(f) = n.as_f64() {
+                    RusqliteValue::Real(f)
+                } else {
+                    RusqliteValue::Text(n.to_string())
+                }
+            }
+            serde_json::Value::String(s) => RusqliteValue::Text(s.clone()),
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                RusqliteValue::Text(serde_json::to_string(value).unwrap_or_default())
+            }
+        }
+    }
 
     fn bind_json_value(
         stmt: &mut rusqlite::Statement,
@@ -1070,14 +1091,17 @@ mod sqlite {
             let result = self
                 .conn
                 .call(move |conn| {
-                    let set_clause = updates_clone
-                        .keys()
+                    let update_keys: Vec<String> = updates_clone.keys().cloned().collect();
+                    let pk_keys: Vec<String> = primary_key_values_clone.keys().cloned().collect();
+
+                    let set_clause = update_keys
+                        .iter()
                         .map(|k| format!("\"{}\" = ?", k))
                         .collect::<Vec<_>>()
                         .join(", ");
 
-                    let where_clause = primary_key_values_clone
-                        .keys()
+                    let where_clause = pk_keys
+                        .iter()
                         .map(|k| format!("\"{}\" = ?", k))
                         .collect::<Vec<_>>()
                         .join(" AND ");
@@ -1089,20 +1113,19 @@ mod sqlite {
 
                     let mut stmt = conn.prepare(&sql)?;
 
-                    let mut param_index = 1;
-                    for key in updates_clone.keys() {
+                    let mut params: Vec<RusqliteValue> = Vec::new();
+
+                    for key in &update_keys {
                         let value = updates_clone.get(key).unwrap();
-                        bind_json_value(&mut stmt, param_index, value)?;
-                        param_index += 1;
+                        params.push(json_value_to_rusqlite_value(value));
                     }
 
-                    for key in primary_key_values_clone.keys() {
+                    for key in &pk_keys {
                         let value = primary_key_values_clone.get(key).unwrap();
-                        bind_json_value(&mut stmt, param_index, value)?;
-                        param_index += 1;
+                        params.push(json_value_to_rusqlite_value(value));
                     }
 
-                    let rows_affected = stmt.execute([])?;
+                    let rows_affected = stmt.execute(rusqlite::params_from_iter(params))?;
 
                     Ok(responses::OperationResult {
                         success: true,
@@ -1153,12 +1176,15 @@ mod sqlite {
 
                     let mut stmt = conn.prepare(&sql)?;
 
-                    for (i, key) in columns.iter().enumerate() {
-                        let value = values_clone.get(key).unwrap();
-                        bind_json_value(&mut stmt, i + 1, value)?;
-                    }
+                    let params: Vec<RusqliteValue> = columns
+                        .iter()
+                        .map(|key| {
+                            let value = values_clone.get(key).unwrap();
+                            json_value_to_rusqlite_value(value)
+                        })
+                        .collect();
 
-                    let rows_affected = stmt.execute([])?;
+                    let rows_affected = stmt.execute(rusqlite::params_from_iter(params))?;
 
                     Ok(responses::OperationResult {
                         success: true,
@@ -1197,8 +1223,10 @@ mod sqlite {
             let result = self
                 .conn
                 .call(move |conn| {
-                    let where_clause = primary_key_values_clone
-                        .keys()
+                    let pk_keys: Vec<String> = primary_key_values_clone.keys().cloned().collect();
+
+                    let where_clause = pk_keys
+                        .iter()
                         .map(|k| format!("\"{}\" = ?", k))
                         .collect::<Vec<_>>()
                         .join(" AND ");
@@ -1207,12 +1235,15 @@ mod sqlite {
 
                     let mut stmt = conn.prepare(&sql)?;
 
-                    for (i, key) in primary_key_values_clone.keys().enumerate() {
-                        let value = primary_key_values_clone.get(key).unwrap();
-                        bind_json_value(&mut stmt, i + 1, value)?;
-                    }
+                    let params: Vec<RusqliteValue> = pk_keys
+                        .iter()
+                        .map(|key| {
+                            let value = primary_key_values_clone.get(key).unwrap();
+                            json_value_to_rusqlite_value(value)
+                        })
+                        .collect();
 
-                    let rows_affected = stmt.execute([])?;
+                    let rows_affected = stmt.execute(rusqlite::params_from_iter(params))?;
 
                     Ok(responses::OperationResult {
                         success: true,
