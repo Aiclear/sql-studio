@@ -83,8 +83,8 @@ export const fetchOverview = () => $fetch(overview, `${BASE_URL}/`);
 export const fetchTables = () => $fetch(tables, `${BASE_URL}/tables`);
 export const fetchTable = (name: string) =>
   $fetch(table, `${BASE_URL}/tables/${name}`);
-export const fetchTableData = (name: string, page: number) =>
-  $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}`);
+export const fetchTableData = (name: string, page: number, pageSize: number) =>
+  $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}&page_size=${pageSize}`);
 export const fetchQuery = (value: string) =>
   $fetch(query, `${BASE_URL}/query`, {
     method: "POST",
@@ -126,3 +126,66 @@ const erd = z.object({
 });
 
 export const fetchErd = () => $fetch(erd, `${BASE_URL}/erd`);
+
+const tableColumnInfo = z.object({
+  name: z.string(),
+  data_type: z.string(),
+  nullable: z.boolean(),
+  is_primary_key: z.boolean(),
+  ordinal_position: z.number(),
+});
+
+const tableColumnsInfo = z.object({
+  table_name: z.string(),
+  columns: tableColumnInfo.array(),
+  primary_keys: z.string().array(),
+});
+
+const operationResult = z.object({
+  success: z.boolean(),
+  rows_affected: z.number(),
+  message: z.string().nullable(),
+});
+
+export const fetchTableColumnsInfo = (name: string) =>
+  $fetch(tableColumnsInfo, `${BASE_URL}/tables/${name}/columns`);
+
+export const updateTableRow = (
+  tableName: string,
+  primaryKeyValues: Record<string, unknown>,
+  updates: Record<string, unknown>,
+) =>
+  $fetch(operationResult, `${BASE_URL}/tables/${tableName}/data`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      primary_key_values: primaryKeyValues,
+      updates,
+    }),
+  });
+
+export const insertTableRow = (tableName: string, values: Record<string, unknown>) =>
+  $fetch(operationResult, `${BASE_URL}/tables/${tableName}/data`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values }),
+  });
+
+export const deleteTableRow = (
+  tableName: string,
+  primaryKeyValues: Record<string, unknown>,
+) =>
+  $fetch(operationResult, `${BASE_URL}/tables/${tableName}/data`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ primary_key_values: primaryKeyValues }),
+  });
