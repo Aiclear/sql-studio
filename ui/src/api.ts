@@ -66,6 +66,7 @@ const query = z.object({
 const metadata = z.object({
   version: z.string(),
   can_shutdown: z.boolean(),
+  db_type: z.string(),
 });
 
 const autocomplete = z.object({
