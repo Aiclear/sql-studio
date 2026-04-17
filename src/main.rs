@@ -362,6 +362,11 @@ trait Database: Sized + Clone + Send {
         query: String,
     ) -> impl std::future::Future<Output = color_eyre::Result<responses::Query>> + Send;
 
+    fn execute(
+        &self,
+        query: String,
+    ) -> impl std::future::Future<Output = color_eyre::Result<responses::Execute>> + Send;
+
     fn erd(&self) -> impl std::future::Future<Output = color_eyre::Result<responses::Erd>> + Send;
 }
 
@@ -464,6 +469,13 @@ impl Database for AllDbs {
             AllDbs::Csv(x) => x.query(query).await,
             AllDbs::Clickhouse(x) => x.query(query).await,
             AllDbs::MsSql(x) => x.query(query).await,
+        }
+    }
+
+    async fn execute(&self, query: String) -> color_eyre::Result<responses::Execute> {
+        match self {
+            AllDbs::Postgres(x) => x.execute(query).await,
+            _ => Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL")),
         }
     }
 
@@ -2109,6 +2121,19 @@ mod postgres {
                 .collect::<Vec<_>>();
 
             Ok(responses::Query { columns, rows })
+        }
+
+        async fn execute(&self, query: String) -> color_eyre::Result<responses::Execute> {
+            let result = tokio::time::timeout(self.query_timeout, self.client.batch_execute(&query)).await?;
+
+            match result {
+                Ok(_) => Ok(responses::Execute {
+                    success: true,
+                    rows_affected: 0,
+                    message: Some("Query executed successfully".to_string()),
+                }),
+                Err(e) => Err(color_eyre::eyre::eyre!("Execute failed: {}", e)),
+            }
         }
 
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
@@ -5148,6 +5173,13 @@ mod responses {
     }
 
     #[derive(Serialize)]
+    pub struct Execute {
+        pub success: bool,
+        pub rows_affected: u64,
+        pub message: Option<String>,
+    }
+
+    #[derive(Serialize)]
     pub struct Metadata {
         pub version: String,
         pub can_shutdown: bool,
@@ -5239,6 +5271,11 @@ mod handlers {
             .and(with_state(&shutdown_signal))
             .and(warp::any().map(move || no_shutdown))
             .and_then(shutdown);
+        let execute = warp::post()
+            .and(with_state(&db))
+            .and(warp::path!("execute"))
+            .and(warp::body::json::<QueryBody>())
+            .and_then(execute);
         let erd = warp::path!("erd")
             .and(warp::get())
             .and(with_state(&db))
@@ -5249,6 +5286,7 @@ mod handlers {
             .or(table)
             .or(autocomplete)
             .or(query)
+            .or(execute)
             .or(data)
             .or(metadata)
             .or(shutdown)
@@ -5321,6 +5359,17 @@ mod handlers {
             .await
             .map_err(|_| warp::reject::custom(rejections::InternalServerError))?;
         Ok(warp::reply::json(&tables))
+    }
+
+    async fn execute(
+        db: impl Database,
+        query: QueryBody,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        let result = db
+            .execute(query.query)
+            .await
+            .map_err(|_| warp::reject::custom(rejections::InternalServerError))?;
+        Ok(warp::reply::json(&result))
     }
 
     async fn metadata(no_shutdown: bool, db_type: String) -> Result<impl warp::Reply, warp::Rejection> {

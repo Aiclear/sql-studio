@@ -36,6 +36,7 @@ import {
   fetchTables,
   fetchMetadata,
   fetchErd,
+  fetchExecute,
 } from "@/api";
 import { InfoCard, InfoCardProps } from "@/components/info-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -532,6 +533,11 @@ function AlterTableDialog({ tableName, tableColumns }: AlterTableDialogProps) {
   const [generatedSql, setGeneratedSql] = useState("");
   const [showResult, setShowResult] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [executeResult, setExecuteResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
   const currentTheme = useTheme();
 
   const [newColumnName, setNewColumnName] = useState("");
@@ -654,6 +660,35 @@ function AlterTableDialog({ tableName, tableColumns }: AlterTableDialogProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleExecute = async () => {
+    if (!generatedSql) return;
+
+    setIsExecuting(true);
+    setExecuteResult(null);
+
+    try {
+      const result = await fetchExecute(generatedSql);
+      if (result.success) {
+        setExecuteResult({
+          success: true,
+          message: result.message || "Table structure modified successfully!",
+        });
+      } else {
+        setExecuteResult({
+          success: false,
+          message: result.message || "Failed to execute SQL",
+        });
+      }
+    } catch (error) {
+      setExecuteResult({
+        success: false,
+        message: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+      });
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
   const resetForm = () => {
     setNewColumnName("");
     setNewColumnType("");
@@ -666,6 +701,8 @@ function AlterTableDialog({ tableName, tableColumns }: AlterTableDialogProps) {
     setSelectedColumnToDrop("");
     setShowResult(false);
     setGeneratedSql("");
+    setExecuteResult(null);
+    setIsExecuting(false);
   };
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -701,8 +738,8 @@ function AlterTableDialog({ tableName, tableColumns }: AlterTableDialogProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Modify Table: {tableName}</DialogTitle>
           <DialogDescription>
             Generate ALTER TABLE statements to modify the table structure.
@@ -710,7 +747,7 @@ function AlterTableDialog({ tableName, tableColumns }: AlterTableDialogProps) {
         </DialogHeader>
 
         {!showResult ? (
-          <div className="space-y-4">
+          <div className="space-y-4 flex-shrink-0 overflow-auto">
             <Tabs
               value={activeTab}
               onValueChange={(v) => setActiveTab(v as any)}
@@ -918,8 +955,8 @@ function AlterTableDialog({ tableName, tableColumns }: AlterTableDialogProps) {
             </Tabs>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold">Generated SQL</h4>
               <Button
                 variant="ghost"
@@ -935,7 +972,7 @@ function AlterTableDialog({ tableName, tableColumns }: AlterTableDialogProps) {
                 {copied ? "Copied!" : "Copy"}
               </Button>
             </div>
-            <div className="max-h-[40vh] overflow-auto">
+            <div className="flex-1 min-h-0 overflow-auto mb-4">
               <CodeBlock
                 text={generatedSql}
                 language="sql"
@@ -947,14 +984,39 @@ function AlterTableDialog({ tableName, tableColumns }: AlterTableDialogProps) {
                   backgroundColor:
                     currentTheme === "dark" ? "#091813" : "#f5faf9",
                   borderRadius: "10px",
+                  minHeight: "150px",
                 }}
               />
             </div>
-            <DialogFooter className="flex gap-2">
+
+            {executeResult && (
+              <div
+                className={`p-3 rounded-lg mb-4 text-sm ${
+                  executeResult.success
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                    : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                }`}
+              >
+                {executeResult.success ? (
+                  <Check className="h-4 w-4 inline mr-2" />
+                ) : null}
+                {executeResult.message}
+              </div>
+            )}
+
+            <DialogFooter className="flex gap-2 flex-shrink-0">
               <Button variant="outline" onClick={resetForm}>
                 Back
               </Button>
-              <Button onClick={() => setOpen(false)}>Close</Button>
+              <Button
+                onClick={handleExecute}
+                disabled={isExecuting || !!executeResult?.success}
+              >
+                {isExecuting ? "Executing..." : "Execute"}
+              </Button>
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Close
+              </Button>
             </DialogFooter>
           </div>
         )}

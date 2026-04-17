@@ -63,6 +63,12 @@ const query = z.object({
   rows: z.any().array().array(),
 });
 
+const execute = z.object({
+  success: z.boolean(),
+  rows_affected: z.number(),
+  message: z.string().nullable(),
+});
+
 const metadata = z.object({
   version: z.string(),
   can_shutdown: z.boolean(),
@@ -88,6 +94,15 @@ export const fetchTableData = (name: string, page: number) =>
   $fetch(tableData, `${BASE_URL}/tables/${name}/data?page=${page}`);
 export const fetchQuery = (value: string) =>
   $fetch(query, `${BASE_URL}/query`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query: value }),
+  });
+export const fetchExecute = (value: string) =>
+  $fetch(execute, `${BASE_URL}/execute`, {
     method: "POST",
     headers: {
       Accept: "application/json",
