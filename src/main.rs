@@ -900,6 +900,10 @@ mod sqlite {
             Ok(res)
         }
 
+        async fn execute(&self, _query: String) -> color_eyre::Result<responses::Execute> {
+            Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL"))
+        }
+
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
             Ok(self
                 .conn
@@ -1521,6 +1525,10 @@ mod libsql {
                 .collect::<Vec<_>>();
 
             Ok(responses::Query { columns, rows })
+        }
+
+        async fn execute(&self, _query: String) -> color_eyre::Result<responses::Execute> {
+            Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL"))
         }
 
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
@@ -2657,6 +2665,10 @@ mod mysql {
             Ok(responses::Query { columns, rows })
         }
 
+        async fn execute(&self, _query: String) -> color_eyre::Result<responses::Execute> {
+            Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL"))
+        }
+
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
             let mut conn = self.pool.get_conn().await?;
 
@@ -3153,6 +3165,10 @@ mod duckdb {
             Ok(responses::Query { columns, rows })
         }
 
+        async fn execute(&self, _query: String) -> color_eyre::Result<responses::Execute> {
+            Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL"))
+        }
+
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
             let c = self.conn.clone();
             tokio::task::spawn_blocking(move || {
@@ -3512,6 +3528,10 @@ mod parquet {
             Ok(responses::Query { columns, rows })
         }
 
+        async fn execute(&self, _query: String) -> color_eyre::Result<responses::Execute> {
+            Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL"))
+        }
+
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
             let c = self.conn.clone();
             let table_name = self.table_name.clone();
@@ -3837,6 +3857,10 @@ mod csv {
             let (columns, rows) = tokio::time::timeout(self.query_timeout, future).await???;
 
             Ok(responses::Query { columns, rows })
+        }
+
+        async fn execute(&self, _query: String) -> color_eyre::Result<responses::Execute> {
+            Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL"))
         }
 
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
@@ -4275,6 +4299,10 @@ mod clickhouse {
                 columns: Vec::new(),
                 rows: Vec::new(),
             })
+        }
+
+        async fn execute(&self, _query: String) -> color_eyre::Result<responses::Execute> {
+            Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL"))
         }
 
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
@@ -4881,6 +4909,10 @@ mod mssql {
             .await?;
 
             Ok(responses::Query { columns, rows })
+        }
+
+        async fn execute(&self, _query: String) -> color_eyre::Result<responses::Execute> {
+            Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL"))
         }
 
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
