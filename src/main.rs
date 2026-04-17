@@ -139,38 +139,54 @@ async fn main() -> color_eyre::Result<()> {
 
     let args = Args::parse();
 
-    let db = match args.db {
-        Command::Sqlite { database } => {
-            AllDbs::Sqlite(sqlite::Db::open(database, args.timeout.into()).await?)
-        }
-        Command::Libsql { url, auth_token } => {
-            AllDbs::Libsql(libsql::Db::open(url, auth_token, args.timeout.into()).await?)
-        }
-        Command::LocalLibsql { database } => {
-            AllDbs::Libsql(libsql::Db::open_local(database, args.timeout.into()).await?)
-        }
-        Command::Postgres { url, schema } => {
-            AllDbs::Postgres(postgres::Db::open(url, schema, args.timeout.into()).await?)
-        }
-        Command::Mysql { url } => AllDbs::Mysql(mysql::Db::open(url, args.timeout.into()).await?),
-        Command::Duckdb { database } => {
-            AllDbs::Duckdb(duckdb::Db::open(database, args.timeout.into()).await?)
-        }
-        Command::Parquet { file } => {
-            AllDbs::Parquet(parquet::Db::open(file, args.timeout.into()).await?)
-        }
-        Command::Csv { file } => AllDbs::Csv(csv::Db::open(file, args.timeout.into()).await?),
+    let (db, db_type) = match args.db {
+        Command::Sqlite { database } => (
+            AllDbs::Sqlite(sqlite::Db::open(database, args.timeout.into()).await?),
+            "sqlite".to_string(),
+        ),
+        Command::Libsql { url, auth_token } => (
+            AllDbs::Libsql(libsql::Db::open(url, auth_token, args.timeout.into()).await?),
+            "libsql".to_string(),
+        ),
+        Command::LocalLibsql { database } => (
+            AllDbs::Libsql(libsql::Db::open_local(database, args.timeout.into()).await?),
+            "libsql".to_string(),
+        ),
+        Command::Postgres { url, schema } => (
+            AllDbs::Postgres(postgres::Db::open(url, schema, args.timeout.into()).await?),
+            "postgres".to_string(),
+        ),
+        Command::Mysql { url } => (
+            AllDbs::Mysql(mysql::Db::open(url, args.timeout.into()).await?),
+            "mysql".to_string(),
+        ),
+        Command::Duckdb { database } => (
+            AllDbs::Duckdb(duckdb::Db::open(database, args.timeout.into()).await?),
+            "duckdb".to_string(),
+        ),
+        Command::Parquet { file } => (
+            AllDbs::Parquet(parquet::Db::open(file, args.timeout.into()).await?),
+            "parquet".to_string(),
+        ),
+        Command::Csv { file } => (
+            AllDbs::Csv(csv::Db::open(file, args.timeout.into()).await?),
+            "csv".to_string(),
+        ),
         Command::Clickhouse {
             url,
             user,
             password,
             database,
-        } => AllDbs::Clickhouse(Box::new(
-            clickhouse::Db::open(url, user, password, database, args.timeout.into()).await?,
-        )),
-        Command::Mssql { connection } => {
-            AllDbs::MsSql(mssql::Db::open(connection, args.timeout.into()).await?)
-        }
+        } => (
+            AllDbs::Clickhouse(Box::new(
+                clickhouse::Db::open(url, user, password, database, args.timeout.into()).await?,
+            )),
+            "clickhouse".to_string(),
+        ),
+        Command::Mssql { connection } => (
+            AllDbs::MsSql(mssql::Db::open(connection, args.timeout.into()).await?),
+            "mssql".to_string(),
+        ),
     };
 
     let mut index_html = statics::get_index_html()?;
@@ -189,7 +205,7 @@ async fn main() -> color_eyre::Result<()> {
 
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
 
-    let api = warp::path("api").and(handlers::routes(db, args.no_shutdown, shutdown_tx));
+    let api = warp::path("api").and(handlers::routes(db, args.no_shutdown, shutdown_tx, db_type));
     let homepage = statics::homepage(index_html.clone());
     let statics = statics::routes(
         match args.base_path.as_ref() {
@@ -346,6 +362,11 @@ trait Database: Sized + Clone + Send {
         query: String,
     ) -> impl std::future::Future<Output = color_eyre::Result<responses::Query>> + Send;
 
+    fn execute(
+        &self,
+        query: String,
+    ) -> impl std::future::Future<Output = color_eyre::Result<responses::Execute>> + Send;
+
     fn erd(&self) -> impl std::future::Future<Output = color_eyre::Result<responses::Erd>> + Send;
 }
 
@@ -448,6 +469,13 @@ impl Database for AllDbs {
             AllDbs::Csv(x) => x.query(query).await,
             AllDbs::Clickhouse(x) => x.query(query).await,
             AllDbs::MsSql(x) => x.query(query).await,
+        }
+    }
+
+    async fn execute(&self, query: String) -> color_eyre::Result<responses::Execute> {
+        match self {
+            AllDbs::Postgres(x) => x.execute(query).await,
+            _ => Err(color_eyre::eyre::eyre!("Execute is only supported for PostgreSQL")),
         }
     }
 
@@ -2093,6 +2121,19 @@ mod postgres {
                 .collect::<Vec<_>>();
 
             Ok(responses::Query { columns, rows })
+        }
+
+        async fn execute(&self, query: String) -> color_eyre::Result<responses::Execute> {
+            let result = tokio::time::timeout(self.query_timeout, self.client.batch_execute(&query)).await?;
+
+            match result {
+                Ok(_) => Ok(responses::Execute {
+                    success: true,
+                    rows_affected: 0,
+                    message: Some("Query executed successfully".to_string()),
+                }),
+                Err(e) => Err(color_eyre::eyre::eyre!("Execute failed: {}", e)),
+            }
         }
 
         async fn erd(&self) -> color_eyre::Result<responses::Erd> {
@@ -5132,9 +5173,17 @@ mod responses {
     }
 
     #[derive(Serialize)]
+    pub struct Execute {
+        pub success: bool,
+        pub rows_affected: u64,
+        pub message: Option<String>,
+    }
+
+    #[derive(Serialize)]
     pub struct Metadata {
         pub version: String,
         pub can_shutdown: bool,
+        pub db_type: String,
     }
 
     #[derive(Serialize)]
@@ -5184,6 +5233,7 @@ mod handlers {
         db: impl Database + 'static,
         no_shutdown: bool,
         shutdown_signal: mpsc::Sender<()>,
+        db_type: String,
     ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
         let overview = warp::path::end()
             .and(warp::get())
@@ -5214,12 +5264,18 @@ mod handlers {
         let metadata = warp::get()
             .and(warp::path!("metadata"))
             .and(warp::any().map(move || no_shutdown))
+            .and(warp::any().map(move || db_type.clone()))
             .and_then(metadata);
         let shutdown = warp::post()
             .and(warp::path!("shutdown"))
             .and(with_state(&shutdown_signal))
             .and(warp::any().map(move || no_shutdown))
             .and_then(shutdown);
+        let execute = warp::post()
+            .and(with_state(&db))
+            .and(warp::path!("execute"))
+            .and(warp::body::json::<QueryBody>())
+            .and_then(execute);
         let erd = warp::path!("erd")
             .and(warp::get())
             .and(with_state(&db))
@@ -5230,6 +5286,7 @@ mod handlers {
             .or(table)
             .or(autocomplete)
             .or(query)
+            .or(execute)
             .or(data)
             .or(metadata)
             .or(shutdown)
@@ -5304,10 +5361,22 @@ mod handlers {
         Ok(warp::reply::json(&tables))
     }
 
-    async fn metadata(no_shutdown: bool) -> Result<impl warp::Reply, warp::Rejection> {
+    async fn execute(
+        db: impl Database,
+        query: QueryBody,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        let result = db
+            .execute(query.query)
+            .await
+            .map_err(|_| warp::reject::custom(rejections::InternalServerError))?;
+        Ok(warp::reply::json(&result))
+    }
+
+    async fn metadata(no_shutdown: bool, db_type: String) -> Result<impl warp::Reply, warp::Rejection> {
         let version = Metadata {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             can_shutdown: !no_shutdown,
+            db_type,
         };
 
         Ok(warp::reply::json(&version))
